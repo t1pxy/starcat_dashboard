@@ -1,3 +1,4 @@
+import { STALE_DAYS } from "./schema";
 import type { DeviceFilters, DeviceSort } from "./types";
 
 /** Raw `searchParams` as Next.js hands them to a page. */
@@ -30,6 +31,21 @@ function toNumber(value: string | string[] | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+/**
+ * A whole number of days, as typed by a person.
+ *
+ * The silence threshold is the one filter whose value the user picks freely
+ * rather than choosing from a list, so it is the one that has to survive
+ * `?stale=abc`, `?stale=-5` and `?stale=1e9`. One day is the smallest span the
+ * data can express (`daysSinceSeen` is whole days) and ten years is past the
+ * age of anything in the register, so anything beyond that is a typo.
+ */
+function toDayCount(value: string | string[] | undefined): number | undefined {
+  const parsed = toNumber(value);
+  if (parsed === undefined) return undefined;
+  return Math.min(3650, Math.max(1, Math.trunc(parsed)));
+}
+
 function toString(value: string | string[] | undefined): string | undefined {
   const first = Array.isArray(value) ? value[0] : value;
   const trimmed = first?.trim();
@@ -55,7 +71,7 @@ export function parseFilters(params: RawSearchParams): DeviceFilters {
   if (online === "true" || online === "false") filters.online = online;
 
   filters.warrantyWithinDays = toNumber(params.warrantyWithin);
-  filters.staleDays = toNumber(params.stale);
+  filters.staleDays = toDayCount(params.stale);
   filters.minAgeYears = toNumber(params.minAge);
   if (toString(params.outdated) === "1") filters.outdatedOnly = true;
 
@@ -64,6 +80,19 @@ export function parseFilters(params: RawSearchParams): DeviceFilters {
   return Object.fromEntries(
     Object.entries(filters).filter(([, value]) => value !== undefined),
   ) as DeviceFilters;
+}
+
+/**
+ * How many days of silence the page currently counts as "out of contact".
+ *
+ * `?stale=N` is deliberately one number doing one job: it both narrows the view
+ * to the machines that have been quiet that long *and* is the number the tile,
+ * the inactive-devices queue and the contact chart speak in. Two separate knobs
+ * — one to filter, one to relabel — is how a page ends up filtered at 90 days
+ * while a tile beside it still says 30.
+ */
+export function staleThreshold(filters: DeviceFilters): number {
+  return filters.staleDays ?? STALE_DAYS;
 }
 
 export function parseSort(params: RawSearchParams): DeviceSort | undefined {

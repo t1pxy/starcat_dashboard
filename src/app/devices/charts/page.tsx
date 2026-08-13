@@ -10,10 +10,12 @@ import { SummaryCards } from "@/components/summary-cards";
 import {
   countActiveFilters,
   parseFilters,
+  staleThreshold,
   type RawSearchParams,
 } from "@/lib/devices/filters";
 import { getCharts, getFacets } from "@/lib/devices/query";
-import { bucketTotal, DISTRIBUTIONS } from "@/lib/devices/status";
+import { STALE_DAYS } from "@/lib/devices/schema";
+import { bucketTotal, distributionsFor } from "@/lib/devices/status";
 
 export const metadata = {
   title: "กราฟอุปกรณ์ — Starcat Helpdesk",
@@ -82,6 +84,11 @@ async function Charts({ params }: { params: RawSearchParams }) {
     getCharts(filters),
     getFacets(filters.scope),
   ]);
+  const fetchedAt = new Date().toISOString();
+
+  // The contact chart is cut at whatever the reader set, so its legend has to
+  // be built from the same number rather than from the default.
+  const staleDays = staleThreshold(filters);
 
   return (
     <div className="space-y-4">
@@ -89,11 +96,16 @@ async function Charts({ params }: { params: RawSearchParams }) {
         active="charts"
         params={params}
         total={data.summary.total}
+        fetchedAt={fetchedAt}
       />
 
-      <FilterBar facets={facets} activeCount={countActiveFilters(filters)} />
+      <FilterBar
+        facets={facets}
+        activeCount={countActiveFilters(filters)}
+        defaultStaleDays={STALE_DAYS}
+      />
 
-      <SummaryCards summary={data.summary} />
+      <SummaryCards summary={data.summary} staleDays={staleDays} />
 
       <DepartmentHealthTable departments={data.departments} params={params} />
 
@@ -104,7 +116,7 @@ async function Charts({ params }: { params: RawSearchParams }) {
       />
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {DISTRIBUTIONS.map((spec) => {
+        {distributionsFor(staleDays).map((spec) => {
           const counts = data.distributions[spec.key];
           return (
             <StatusBar

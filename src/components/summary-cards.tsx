@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { formatNumber } from "@/lib/devices/format";
-import { EXPIRING_SOON_DAYS, STALE_DAYS } from "@/lib/devices/schema";
+import { EXPIRING_SOON_DAYS } from "@/lib/devices/schema";
 import type { Summary } from "@/lib/devices/types";
 
 /**
@@ -71,7 +71,15 @@ function Card({ tile }: { tile: Tile }) {
   );
 }
 
-export function SummaryCards({ summary }: { summary: Summary }) {
+export function SummaryCards({
+  summary,
+  staleDays,
+}: {
+  summary: Summary;
+  /** The silence threshold currently in force — the tile is labelled and links
+   *  with the reader's own number, not a fixed 30. */
+  staleDays: number;
+}) {
   const tiles: Tile[] = [
     {
       label: "อุปกรณ์ทั้งหมด",
@@ -111,12 +119,12 @@ export function SummaryCards({ summary }: { summary: Summary }) {
       href: "/devices?outdated=1",
     },
     {
-      label: `ไม่ติดต่อเกิน ${STALE_DAYS} วัน`,
+      label: `ไม่ติดต่อตั้งแต่ ${staleDays} วัน`,
       english: "Stale agents",
       value: formatNumber(summary.staleAgents),
       hint: "เครื่องที่เงียบหายไป อัพเดทไม่ได้",
       tone: summary.staleAgents > 0 ? "warn" : "good",
-      href: `/devices?stale=${STALE_DAYS}`,
+      href: `/devices?stale=${staleDays}`,
     },
     {
       label: "ประกันหมดแล้ว",

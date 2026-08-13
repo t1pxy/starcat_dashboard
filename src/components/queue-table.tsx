@@ -1,6 +1,6 @@
-import { DeviceCell } from "@/components/device-cell";
+import { DeviceRows } from "@/components/device-rows";
 import { columnWidths, type DeviceColumn } from "@/lib/devices/columns";
-import { formatDaysAgo, formatNumber } from "@/lib/devices/format";
+import { formatNumber } from "@/lib/devices/format";
 import type { Device } from "@/lib/devices/types";
 
 /**
@@ -85,16 +85,7 @@ export function QueueTable({
         rowCount={devices.length}
         emptyLabel={emptyLabel}
       >
-        {devices.map((device) => (
-          <tr
-            key={device.agentId}
-            className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40"
-          >
-            {columns.map((column) => (
-              <Cell key={String(column.key)} device={device} column={column} />
-            ))}
-          </tr>
-        ))}
+        <DeviceRows devices={devices} columns={columns} />
       </TableFrame>
     </section>
   );
@@ -162,26 +153,5 @@ function TableFrame({
         )}
       </tbody>
     </table>
-  );
-}
-
-function Cell({ device, column }: { device: Device; column: DeviceColumn }) {
-  return (
-    <td
-      className={`px-2.5 py-2 align-top break-words text-zinc-700 dark:text-zinc-300 ${
-        column.kind === "number" ? "text-right" : ""
-      } ${
-        column.key === "deviceName"
-          ? "font-medium text-zinc-900 dark:text-zinc-100"
-          : ""
-      }`}
-    >
-      {/* "ไม่ติดต่อ 412 วัน" reads better than a bare 412 in a work queue. */}
-      {column.key === "daysSinceSeen" ? (
-        formatDaysAgo(device.daysSinceSeen)
-      ) : (
-        <DeviceCell device={device} column={column} />
-      )}
-    </td>
   );
 }

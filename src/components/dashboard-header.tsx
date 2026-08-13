@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { LiveRefresh } from "@/components/live-refresh";
 import { buildQueryString, type RawSearchParams } from "@/lib/devices/filters";
 import { formatNumber } from "@/lib/devices/format";
 
@@ -26,11 +27,14 @@ export function DashboardHeader({
   active,
   params,
   total,
+  fetchedAt,
 }: {
   active: DashboardView;
   params: RawSearchParams;
   /** Row count behind the export link, so the button says what it will produce. */
   total: number;
+  /** When the data on screen was read, for the freshness line. */
+  fetchedAt: string;
 }) {
   // Sorting and paging belong to the table view; carrying them onto the charts
   // tab and back again would be noise in the URL.
@@ -45,9 +49,12 @@ export function DashboardHeader({
             Starcat Helpdesk — Device Dashboard
           </span>
         </h1>
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-          ข้อมูลสดจากฐานข้อมูล MSSQL · ตัวกรองมีผลกับทุกหน้า ทั้งกราฟ ตาราง และไฟล์ Excel
-        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+          <LiveRefresh fetchedAt={fetchedAt} />
+          <span className="text-zinc-400 dark:text-zinc-500">
+            ตัวกรองมีผลกับทุกหน้า ทั้งกราฟ ตาราง และไฟล์ Excel
+          </span>
+        </div>
 
         <nav aria-label="มุมมอง" className="mt-3 flex gap-1">
           {VIEWS.map((view) => {
@@ -79,14 +86,27 @@ export function DashboardHeader({
         </nav>
       </div>
 
-      <a
-        href={`/api/devices/export${buildQueryString(params, { page: null })}`}
-        className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700"
-      >
-        <span aria-hidden>⤓</span>
-        Export Excel
-        <span className="text-emerald-200">({formatNumber(total)})</span>
-      </a>
+      <div className="flex items-center gap-2">
+        {/* The wall view carries the filters across too, so a team can put
+            "their" slice of the fleet on the screen behind them. */}
+        <Link
+          href={`/devices/wall${query}`}
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-zinc-300 px-3 text-sm text-zinc-700 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500"
+        >
+          <span aria-hidden>◱</span>
+          จอผนัง
+          <span className="text-xs text-zinc-400 dark:text-zinc-500">Wall</span>
+        </Link>
+
+        <a
+          href={`/api/devices/export${buildQueryString(params, { page: null })}`}
+          className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700"
+        >
+          <span aria-hidden>⤓</span>
+          Export Excel
+          <span className="text-emerald-200">({formatNumber(total)})</span>
+        </a>
+      </div>
     </div>
   );
 }

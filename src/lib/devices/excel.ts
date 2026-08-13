@@ -8,7 +8,8 @@ import {
   STALE_COLUMNS,
   type DeviceColumn,
 } from "./columns";
-import { EXPIRING_SOON_DAYS, STALE_DAYS } from "./schema";
+import { staleThreshold } from "./filters";
+import { EXPIRING_SOON_DAYS } from "./schema";
 import type { Device, DeviceFilters, Summary } from "./types";
 
 const HEADER_FILL: ExcelJS.Fill = {
@@ -174,7 +175,7 @@ function addSummarySheet(
     ["ออฟไลน์ (Offline)", summary.offline],
     ["อายุเฉลี่ย (Average age, years)", summary.averageAgeYears],
     [
-      `ไม่ติดต่อเกิน ${STALE_DAYS} วัน (Stale agents)`,
+      `ไม่ติดต่อตั้งแต่ ${staleThreshold(filters)} วัน (Stale agents)`,
       summary.staleAgents,
     ],
     ["ประกันหมดแล้ว (Warranty expired)", summary.warrantyExpired],

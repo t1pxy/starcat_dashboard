@@ -1,7 +1,8 @@
 import "server-only";
 
 import { query, queryBatch, sql, type QueryParam } from "@/lib/db";
-import { DEVICE_SOURCE, EXPIRING_SOON_DAYS, STALE_DAYS } from "./schema";
+import { staleThreshold } from "./filters";
+import { DEVICE_SOURCE, EXPIRING_SOON_DAYS } from "./schema";
 import type {
   Breakdown,
   DepartmentHealth,
@@ -52,6 +53,22 @@ const DIMENSIONS = [
 type Dimension = (typeof DIMENSIONS)[number];
 
 /**
+ * Names that follow the asset scheme — `25PDT001`: two-digit ค.ศ. year, P/R for
+ * ซื้อ/เช่า, DT/NB for ตั้งโต๊ะ/โน้ตบุ๊ก, then a running number.
+ *
+ * Deliberately the same shape the TypeScript parser accepts
+ * (`src/lib/devices/device-name.ts`), so a row the SQL counts is a row the UI
+ * can also decode.
+ *
+ * Takes the table alias because the same test is applied both to the source
+ * table (`dev.`) and to the materialised `#dev` (no alias).
+ */
+function nameMatchesScheme(prefix: string): string {
+  return `${prefix}deviceName LIKE '[0-9][0-9][PR]%'
+      AND SUBSTRING(${prefix}deviceName, 4, 2) IN ('DT', 'NB')`;
+}
+
+/**
  * Turns the filter object into a parameterised WHERE clause. Values are only
  * ever bound through `request.input`, never interpolated, so a department name
  * containing an apostrophe (or worse) cannot alter the statement.
@@ -68,6 +85,16 @@ function buildWhere(filters: DeviceFilters): {
   // no agent and no contact history, so leaving it in would only dilute every
   // health figure on the page.
   if (filters.scope !== "all") conditions.push("dev.deviceType = 'COMPUTER'");
+
+  // Machines whose name does not follow the asset scheme are not part of the
+  // managed fleet: they are spares, test builds and hand-named one-offs
+  // (DESKTOP-VGKC2IQ, IHL-ADOBE), and counting them made every fleet figure
+  // slightly wrong. Only computers are held to it — no printer was ever going
+  // to be called 25PDT001, and applying it to equipment would empty the
+  // "อุปกรณ์ทั้งหมด" view entirely.
+  conditions.push(
+    `dev.deviceType <> 'COMPUTER' OR (${nameMatchesScheme("dev.")})`,
+  );
 
   const addIn = (column: string, values: string[] | undefined) => {
     if (!values?.length) return;
@@ -114,11 +141,12 @@ function buildWhere(filters: DeviceFilters): {
   }
 
   if (filters.staleDays !== undefined) {
-    params.push({ name: "staleDays", type: sql.Int, value: filters.staleDays });
+    // Bound once by `materialise`, because the same threshold also decides what
+    // the summary tile counts and what the inactive queue lists.
     // A device that never reported counts as stale too, otherwise the machines
     // most in need of attention drop out of the list.
     conditions.push(
-      "(dev.daysSinceSeen IS NULL OR dev.daysSinceSeen >= @staleDays)",
+      "(dev.daysSinceSeen IS NULL OR dev.daysSinceSeen >= @staleThreshold)",
     );
   }
 
@@ -155,6 +183,16 @@ function materialise(filters: DeviceFilters): {
   const where = conditions.length
     ? ` WHERE ${conditions.map((condition) => `(${condition})`).join(" AND ")}`
     : "";
+
+  // Always bound, filtered or not: every statement below asks "how long is too
+  // long to hear nothing", and binding it once here is what keeps the tile, the
+  // queue and the contact chart from each answering with a different number.
+  params.push({
+    name: "staleThreshold",
+    type: sql.Int,
+    value: staleThreshold(filters),
+  });
+
   return {
     prelude: `SELECT * INTO #dev FROM (${DEVICE_SOURCE}) AS dev${where};`,
     params,
@@ -171,7 +209,7 @@ SELECT
   SUM(CASE WHEN windowsVersion IS NOT NULL
             AND windowsVersion < newestWindowsVersion
            THEN 1 ELSE 0 END)                                   AS outdatedWindows,
-  SUM(CASE WHEN daysSinceSeen >= ${STALE_DAYS} THEN 1 ELSE 0 END) AS staleAgents,
+  SUM(CASE WHEN daysSinceSeen >= @staleThreshold THEN 1 ELSE 0 END) AS staleAgents,
   SUM(CASE WHEN warrantyDaysLeft < 0 THEN 1 ELSE 0 END)         AS warrantyExpired,
   SUM(CASE WHEN warrantyDaysLeft BETWEEN 0 AND ${EXPIRING_SOON_DAYS}
            THEN 1 ELSE 0 END)                                   AS warrantyExpiring90,
@@ -218,7 +256,7 @@ SELECT TOP 25
             AND windowsVersion < newestWindowsVersion
            THEN 1 ELSE 0 END)                                  AS outdated,
   SUM(CASE WHEN deviceType = 'COMPUTER'
-            AND (daysSinceSeen IS NULL OR daysSinceSeen >= ${STALE_DAYS})
+            AND (daysSinceSeen IS NULL OR daysSinceSeen >= @staleThreshold)
            THEN 1 ELSE 0 END)                                  AS stale
 FROM #dev
 GROUP BY department
@@ -231,11 +269,13 @@ ORDER BY total DESC;`;
  * GROUP BY — because SQL Server will not let GROUP BY reference a column alias.
  * They are named constants so the two copies cannot drift apart.
  */
+// The threshold is tested *first* so the buckets stay in order however low it
+// is set: at `?stale=3` a machine five days quiet is lost, not "ปกติ".
 const CONTACT_BUCKET = `
-  CASE WHEN daysSinceSeen IS NULL          THEN 'never'
-       WHEN daysSinceSeen <= 7             THEN 'ok'
-       WHEN daysSinceSeen <= ${STALE_DAYS} THEN 'slow'
-       ELSE 'lost' END`;
+  CASE WHEN daysSinceSeen IS NULL            THEN 'never'
+       WHEN daysSinceSeen >= @staleThreshold THEN 'lost'
+       WHEN daysSinceSeen <= 7               THEN 'ok'
+       ELSE 'slow' END`;
 
 const WARRANTY_BUCKET = `
   CASE WHEN warrantyDaysLeft IS NULL                  THEN 'unknown'
@@ -278,13 +318,10 @@ SELECT 'age', ${AGE_BUCKET}, COUNT(*)
  * purchased-versus-leased in particular decides who pays to replace a machine,
  * so it is worth reading out of the name rather than leaving it encoded.
  *
- * The filter is the same shape the TypeScript parser accepts, so a row counted
- * here is a row the table can also decode. Names that do not match are older or
- * hand-entered; they are reported as a remainder rather than guessed at.
+ * Non-conforming computers are filtered out of `#dev` upstream, so the
+ * remainder this reports is now only the equipment register under `scope=all`.
  */
-const NAME_PATTERN = `
-  deviceName LIKE '[0-9][0-9][PR]%'
-  AND SUBSTRING(deviceName, 4, 2) IN ('DT', 'NB')`;
+const NAME_PATTERN = nameMatchesScheme("");
 
 const NAMING_SELECT = `
 SELECT
@@ -306,10 +343,11 @@ ORDER BY yr ASC;`;
  * Windows feature version than the newest one in the fleet. Oldest version
  * first, so the machines furthest behind lead the list.
  *
- * `STALE` is "find this machine": a managed PC that has not reported in for
- * ${STALE_DAYS} days, or has never reported at all, cannot be patched until
- * somebody works out where it went. Longest silence first, and the ones that
- * never checked in lead — they are the least accounted for.
+ * `STALE` is "find this machine": a managed PC silent for longer than the
+ * current threshold (`?stale=N`, 30 days by default), or that has never
+ * reported at all, cannot be patched until somebody works out where it went.
+ * Longest silence first, and the ones that never checked in lead — they are the
+ * least accounted for.
  *
  * A machine can be in both lists, and when it is, both statements are true of
  * it; suppressing it from one would hide real work.
@@ -322,7 +360,7 @@ const OUTDATED_ORDER = `
 
 const STALE_WHERE = `
   deviceType = 'COMPUTER'
-  AND (daysSinceSeen IS NULL OR daysSinceSeen >= ${STALE_DAYS})`;
+  AND (daysSinceSeen IS NULL OR daysSinceSeen >= @staleThreshold)`;
 
 const STALE_ORDER = `
   ORDER BY CASE WHEN daysSinceSeen IS NULL THEN 0 ELSE 1 END,

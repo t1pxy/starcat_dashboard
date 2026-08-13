@@ -11,10 +11,11 @@ import {
   parseFilters,
   parsePage,
   parseSort,
+  staleThreshold,
   type RawSearchParams,
 } from "@/lib/devices/filters";
-import { STALE_DAYS } from "@/lib/devices/schema";
 import { getFacets, getTables } from "@/lib/devices/query";
+import { STALE_DAYS } from "@/lib/devices/schema";
 
 export const metadata = {
   title: "ตารางอุปกรณ์ — Starcat Helpdesk",
@@ -53,17 +54,32 @@ async function Tables({ params }: { params: RawSearchParams }) {
     }),
     getFacets(filters.scope),
   ]);
+  // Stamped after the query, not before: this is what the numbers below are
+  // true as of, and the header keeps saying how long ago that was.
+  const fetchedAt = new Date().toISOString();
   const { summary, outdated, stale } = data;
 
   const newest = summary.newestWindowsVersion ?? "—";
+  // Whatever the reader set in the filter bar, spelled back to them here and in
+  // the tile above, so the page never states a threshold it did not use.
+  const staleDays = staleThreshold(filters);
 
   return (
     <div className="space-y-4">
-      <DashboardHeader active="tables" params={params} total={summary.total} />
+      <DashboardHeader
+        active="tables"
+        params={params}
+        total={summary.total}
+        fetchedAt={fetchedAt}
+      />
 
-      <FilterBar facets={facets} activeCount={countActiveFilters(filters)} />
+      <FilterBar
+        facets={facets}
+        activeCount={countActiveFilters(filters)}
+        defaultStaleDays={STALE_DAYS}
+      />
 
-      <SummaryCards summary={summary} />
+      <SummaryCards summary={summary} staleDays={staleDays} />
 
       {/*
         Two queues, two jobs. "อัพเดท" is work you can do right now over the
@@ -85,7 +101,7 @@ async function Tables({ params }: { params: RawSearchParams }) {
         <QueueTable
           title="เครื่องที่ไม่ได้ใช้งานนาน"
           english="Inactive devices"
-          description={`คอมพิวเตอร์ที่ไม่ติดต่อเข้ามาเกิน ${STALE_DAYS} วัน หรือไม่เคยติดต่อเลย — อัพเดทไม่ได้จนกว่าจะตามเจอ`}
+          description={`คอมพิวเตอร์ที่ไม่ติดต่อเข้ามาตั้งแต่ ${staleDays} วันขึ้นไป หรือไม่เคยติดต่อเลย — อัพเดทไม่ได้จนกว่าจะตามเจอ (ปรับจำนวนวันได้ที่ตัวกรอง “ไม่ติดต่อ”)`}
           tone="bad"
           columns={STALE_COLUMNS}
           devices={stale}

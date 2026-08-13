@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { DeviceCell } from "@/components/device-cell";
+import { DeviceRows } from "@/components/device-rows";
 import { columnWidths, TABLE_COLUMNS } from "@/lib/devices/columns";
 import { buildQueryString, type RawSearchParams } from "@/lib/devices/filters";
 import { formatNumber } from "@/lib/devices/format";
@@ -144,6 +144,9 @@ export function DeviceTable({
           </span>
         </h2>
         <span className="text-xs text-zinc-500 dark:text-zinc-400">
+          <span className="mr-2 text-zinc-400 dark:text-zinc-500">
+            คลิกที่แถวเพื่อดูรายละเอียดทั้งหมด
+          </span>
           {formatNumber(total)} รายการ
         </span>
       </div>
@@ -185,23 +188,7 @@ export function DeviceTable({
               </td>
             </tr>
           ) : (
-            devices.map((device) => (
-              <tr
-                key={device.agentId}
-                className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40"
-              >
-                {TABLE_COLUMNS.map((column) => (
-                  <td
-                    key={String(column.key)}
-                    className={`px-2.5 py-2 align-top break-words text-zinc-700 dark:text-zinc-300 ${
-                      column.kind === "number" ? "text-right" : ""
-                    } ${column.key === "deviceName" ? "font-medium text-zinc-900 dark:text-zinc-100" : ""}`}
-                  >
-                    <DeviceCell device={device} column={column} />
-                  </td>
-                ))}
-              </tr>
-            ))
+            <DeviceRows devices={devices} columns={TABLE_COLUMNS} />
           )}
         </tbody>
       </table>

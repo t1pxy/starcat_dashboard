@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:introspect": "node scripts/introspect-db.mjs"
+    "db:introspect": "node scripts/introspect-db.mjs",
+    "windows:refresh": "node scripts/build-windows-releases.mjs"
   },
   "dependencies": {
     "exceljs": "^4.4.0",

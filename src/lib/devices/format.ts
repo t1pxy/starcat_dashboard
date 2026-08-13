@@ -63,6 +63,34 @@ export function formatDaysAgo(days: number | null | undefined): string {
   return `${formatNumber(days)} วันที่แล้ว`;
 }
 
+/**
+ * How long a machine has been unreachable, counted from its last sign of life.
+ *
+ * Days alone are too coarse here: most offline PCs at any moment are simply
+ * switched off for the night, so a day count rounds nearly all of them to
+ * "0 วัน" and the handful that have been gone a fortnight look identical to
+ * the one that went home an hour ago. Hours below a day, days above it.
+ *
+ * There is no "went offline at" column in Starcat — `lastSeen` is the most
+ * recent ping or inventory sweep, which for an offline machine is exactly when
+ * it was last reachable.
+ */
+export function formatOfflineFor(
+  lastSeen: string | null | undefined,
+): string | null {
+  if (!lastSeen) return "ไม่เคยติดต่อ";
+
+  const seen = new Date(lastSeen);
+  if (Number.isNaN(seen.getTime())) return null;
+
+  const minutes = Math.floor((Date.now() - seen.getTime()) / 60_000);
+  // A clock skew between the database server and this one can put "last seen"
+  // slightly in the future; report that as just-now rather than as a negative.
+  if (minutes < 60) return "ไม่ถึง 1 ชม.";
+  if (minutes < 1440) return `${Math.floor(minutes / 60)} ชม.`;
+  return `${formatNumber(Math.floor(minutes / 1440))} วัน`;
+}
+
 /** "เหลือ 42 วัน" / "หมดแล้ว 8 วัน" */
 export function formatWarrantyDays(days: number | null | undefined): string {
   if (days === null || days === undefined) return EM_DASH;

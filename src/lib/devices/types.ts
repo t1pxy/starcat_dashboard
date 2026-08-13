@@ -35,6 +35,8 @@ export type Device = {
   osName: string | null;
   windowsVersion: string | null;
   osBuild: string | null;
+  /** Revision within the build — the "8973" of 26200.8973. */
+  osUbr: string | null;
   osInstallDate: string | null;
   officeVersion: string | null;
   lastSoftwareUpdate: string | null;

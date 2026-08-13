@@ -136,6 +136,10 @@ SELECT
   ${scrub("os.VersionFull")}                            AS osName,
   ${scrub("os.Windows_Version")}                        AS windowsVersion,
   ${scrub("os.Build")}                                  AS osBuild,
+  -- The revision after the dot in 26200.8973. Without it the build number only
+  -- identifies the feature version, and every 25H2 machine looks equally
+  -- patched whether it took last week's update or February's.
+  ${scrub("os.UBR")}                                    AS osUbr,
   os.InstallDate                                        AS osInstallDate,
   ${scrub("comp.OfficeVersion")}                        AS officeVersion,
   comp.LastSoftwareUpdate                               AS lastSoftwareUpdate,

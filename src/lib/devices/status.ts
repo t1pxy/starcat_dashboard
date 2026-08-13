@@ -1,4 +1,4 @@
-import { EXPIRING_SOON_DAYS, STALE_DAYS } from "./schema";
+import { EXPIRING_SOON_DAYS } from "./schema";
 import type { BucketCounts } from "./types";
 
 /**
@@ -41,71 +41,83 @@ export type DistributionSpec = {
 /**
  * The four questions worth asking about a fleet at a glance: can I reach it, is
  * it still covered, is it patched, and how old is it.
+ *
+ * Takes the silence threshold rather than reading the constant, because the
+ * reader sets it (`?stale=N`) and the chart has to be labelled with the number
+ * it was actually cut at — a bar drawn at 90 days under a legend that says 30
+ * is worse than no bar at all.
  */
-export const DISTRIBUTIONS: DistributionSpec[] = [
-  {
-    key: "contact",
-    title: "สถานะการติดต่อ",
-    english: "Contact status",
-    buckets: [
-      { id: "ok", label: "ปกติ (ไม่เกิน 7 วัน)", tone: "good" },
-      {
-        id: "slow",
-        label: `เริ่มเงียบ (8–${STALE_DAYS} วัน)`,
-        tone: "warning",
-      },
-      // "Never reported" and "went quiet" are both simply unreachable, so they
-      // share a segment rather than spending a fifth colour; the count that got
-      // folded in is spelled out underneath instead of being lost.
-      {
-        id: "lost",
-        label: `ขาดการติดต่อ (เกิน ${STALE_DAYS} วัน)`,
-        tone: "critical",
-        merges: ["never"],
-      },
-    ],
-    footnote: (counts) =>
-      counts.never
-        ? `ในจำนวนนี้ ไม่เคยติดต่อเข้ามาเลย ${counts.never} เครื่อง`
-        : null,
-  },
-  {
-    key: "warranty",
-    title: "สถานะประกัน",
-    english: "Warranty status",
-    buckets: [
-      { id: "ok", label: "ยังอยู่ในประกัน", tone: "good" },
-      {
-        id: "soon",
-        label: `ใกล้หมด (ไม่เกิน ${EXPIRING_SOON_DAYS} วัน)`,
-        tone: "warning",
-      },
-      { id: "expired", label: "หมดประกันแล้ว", tone: "critical" },
-      { id: "unknown", label: "ไม่ระบุ", tone: "none" },
-    ],
-  },
-  {
-    key: "windows",
-    title: "ความเป็นปัจจุบันของ Windows",
-    english: "Windows currency",
-    buckets: [
-      { id: "current", label: "เวอร์ชันล่าสุด", tone: "good" },
-      { id: "behind", label: "ตามหลังเวอร์ชันล่าสุด", tone: "warning" },
-      { id: "unknown", label: "ไม่มีข้อมูล (ไม่ใช่เครื่องที่มี Agent)", tone: "none" },
-    ],
-  },
-  {
-    key: "age",
-    title: "อายุเครื่อง",
-    english: "Device age",
-    buckets: [
-      { id: "new", label: "ไม่เกิน 5 ปี", tone: "good" },
-      { id: "old", label: "5–7 ปี", tone: "warning" },
-      { id: "ancient", label: "เกิน 7 ปี — ควรพิจารณาเปลี่ยน", tone: "critical" },
-      { id: "unknown", label: "ไม่ทราบวันที่ซื้อ", tone: "none" },
-    ],
-  },
-];
+export function distributionsFor(staleDays: number): DistributionSpec[] {
+  return [
+    {
+      key: "contact",
+      title: "สถานะการติดต่อ",
+      english: "Contact status",
+      buckets: [
+        { id: "ok", label: "ปกติ (ไม่เกิน 7 วัน)", tone: "good" },
+        {
+          id: "slow",
+          // Below about a week the middle band has no room left to describe, so
+          // it is named rather than given a range that would read "8–4 วัน".
+          label:
+            staleDays > 8
+              ? `เริ่มเงียบ (8–${staleDays - 1} วัน)`
+              : "เริ่มเงียบ",
+          tone: "warning",
+        },
+        // "Never reported" and "went quiet" are both simply unreachable, so they
+        // share a segment rather than spending a fifth colour; the count that got
+        // folded in is spelled out underneath instead of being lost.
+        {
+          id: "lost",
+          label: `ขาดการติดต่อ (${staleDays} วันขึ้นไป)`,
+          tone: "critical",
+          merges: ["never"],
+        },
+      ],
+      footnote: (counts) =>
+        counts.never
+          ? `ในจำนวนนี้ ไม่เคยติดต่อเข้ามาเลย ${counts.never} เครื่อง`
+          : null,
+    },
+    {
+      key: "warranty",
+      title: "สถานะประกัน",
+      english: "Warranty status",
+      buckets: [
+        { id: "ok", label: "ยังอยู่ในประกัน", tone: "good" },
+        {
+          id: "soon",
+          label: `ใกล้หมด (ไม่เกิน ${EXPIRING_SOON_DAYS} วัน)`,
+          tone: "warning",
+        },
+        { id: "expired", label: "หมดประกันแล้ว", tone: "critical" },
+        { id: "unknown", label: "ไม่ระบุ", tone: "none" },
+      ],
+    },
+    {
+      key: "windows",
+      title: "ความเป็นปัจจุบันของ Windows",
+      english: "Windows currency",
+      buckets: [
+        { id: "current", label: "เวอร์ชันล่าสุด", tone: "good" },
+        { id: "behind", label: "ตามหลังเวอร์ชันล่าสุด", tone: "warning" },
+        { id: "unknown", label: "ไม่มีข้อมูล (ไม่ใช่เครื่องที่มี Agent)", tone: "none" },
+      ],
+    },
+    {
+      key: "age",
+      title: "อายุเครื่อง",
+      english: "Device age",
+      buckets: [
+        { id: "new", label: "ไม่เกิน 5 ปี", tone: "good" },
+        { id: "old", label: "5–7 ปี", tone: "warning" },
+        { id: "ancient", label: "เกิน 7 ปี — ควรพิจารณาเปลี่ยน", tone: "critical" },
+        { id: "unknown", label: "ไม่ทราบวันที่ซื้อ", tone: "none" },
+      ],
+    },
+  ];
+}
 
 /** Total for one drawn segment, including any ids folded into it. */
 export function bucketTotal(counts: BucketCounts, bucket: Bucket): number {
