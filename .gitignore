@@ -32,6 +32,15 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# database introspection output — contains real asset data and staff names
+db-introspect.json
+db-introspect.md
+
+# local run logs / exported spreadsheets
+*.log
+*.xlsx
 
 # vercel
 .vercel
