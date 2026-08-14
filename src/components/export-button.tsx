@@ -16,7 +16,7 @@ import { formatNumber } from "@/lib/devices/format";
  * is intercepted, and only to fetch the same URL so the button can report
  * progress and say so when the server refuses.
  */
-type State = "idle" | "loading" | "error";
+type State = "idle" | "loading" | "error" | "throttled";
 
 /** `attachment; filename="starcat-devices-2026-08-14.xlsx"` → the filename. */
 function filenameFrom(header: string | null): string | null {
@@ -52,6 +52,12 @@ export function ExportButton({
 
     try {
       const response = await fetch(href);
+      // The server caps how often one caller may ask for a full export; that is
+      // a "wait a moment", not a failure, and reads differently to the user.
+      if (response.status === 429) {
+        setState("throttled");
+        return;
+      }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const blob = await response.blob();
@@ -94,11 +100,16 @@ export function ExportButton({
         )}
       </a>
 
+      {/* The route already logs the real cause server-side; the reader only
+          needs to know what happened and whether waiting will help. */}
       {state === "error" ? (
-        // The route already logs the real cause server-side; the reader only
-        // needs to know it failed and that trying again is worth it.
         <p role="status" className="text-xs text-red-600 dark:text-red-400">
           สร้างไฟล์ไม่สำเร็จ — ลองใหม่อีกครั้ง
+        </p>
+      ) : null}
+      {state === "throttled" ? (
+        <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
+          ขอไฟล์ถี่เกินไป — รอสักครู่แล้วลองใหม่
         </p>
       ) : null}
     </div>

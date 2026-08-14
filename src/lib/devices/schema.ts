@@ -183,9 +183,3 @@ CROSS JOIN (
   SELECT MAX(${scrub("Windows_Version")}) AS windowsVersion FROM TB_INV_OS
 ) newest
 `;
-
-/** Devices with no contact for this many days are treated as stale. */
-export const STALE_DAYS = 30;
-
-/** Warranty/lease ending within this many days counts as "ใกล้หมดประกัน". */
-export const EXPIRING_SOON_DAYS = 90;

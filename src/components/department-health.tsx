@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Card, CardHeader } from "@/components/ui/card";
+import { DataTable } from "@/components/ui/data-table";
 import { MUTED_TEXT, PLACEHOLDER_TEXT, TONE_TEXT, type Tone } from "@/components/ui/tone";
 import { Bilingual, CardTitle } from "@/components/ui/typography";
 import { buildQueryString, type RawSearchParams } from "@/lib/devices/filters";
@@ -38,79 +39,66 @@ export function DepartmentHealthTable({
 
       {/* Five columns, one of them a bar — below ~36rem they stop being
           readable, so the table scrolls rather than compressing. */}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[36rem] table-fixed border-collapse text-xs sm:min-w-0">
-          <colgroup>
-            <col style={{ width: "22%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "40%" }} />
-            <col style={{ width: "15%" }} />
-            <col style={{ width: "15%" }} />
-          </colgroup>
-          <thead className="border-y border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-400">
-            <tr>
-              <Th>
-                หน่วยงาน
-                <Sub>Department</Sub>
-              </Th>
-              <Th align="right">
-                ทั้งหมด
-                <Sub>Total</Sub>
-              </Th>
-              <Th>
-                ออนไลน์ / ออฟไลน์
-                <Sub>Online / Offline</Sub>
-              </Th>
-              <Th align="right">
-                ต้องอัพเดท
-                <Sub>Needs update</Sub>
-              </Th>
-              <Th align="right">
-                ไม่ได้ใช้งานนาน
-                <Sub>Inactive</Sub>
-              </Th>
-            </tr>
-          </thead>
-          <tbody>
-            {departments.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={5}
-                  className={`px-3 py-10 text-center text-sm ${MUTED_TEXT}`}
-                >
-                  ไม่พบอุปกรณ์ที่ตรงกับตัวกรอง
-                </td>
-              </tr>
-            ) : (
-              departments.map((row) => (
-                <tr
-                  key={row.department}
-                  className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40"
-                >
-                  <td className="px-2.5 py-2 align-middle break-words font-medium text-zinc-900 dark:text-zinc-100">
-                    <Link
-                      href={`/devices/charts${buildQueryString(params, {
-                        department: row.department,
-                      })}`}
-                      className="rounded-sm hover:underline"
-                    >
-                      {row.department}
-                    </Link>
-                  </td>
-                  <td className="px-2.5 py-2 text-right align-middle tabular-nums text-zinc-700 dark:text-zinc-300">
-                    {formatNumber(row.total)}
-                  </td>
-                  <td className="px-2.5 py-2 align-middle">
-                    <OnlineBar row={row} />
-                  </td>
-                  <WorkCount value={row.outdated} tone="warning" />
-                  <WorkCount value={row.stale} tone="critical" />
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        widths={["22%", "8%", "40%", "15%", "15%"]}
+        minWidth="min-w-[36rem] sm:min-w-0"
+        headRow={
+          <>
+            <Th>
+              หน่วยงาน
+              <Sub>Department</Sub>
+            </Th>
+            <Th align="right">
+              ทั้งหมด
+              <Sub>Total</Sub>
+            </Th>
+            <Th>
+              ออนไลน์ / ออฟไลน์
+              <Sub>Online / Offline</Sub>
+            </Th>
+            <Th align="right">
+              ต้องอัพเดท
+              <Sub>Needs update</Sub>
+            </Th>
+            <Th align="right">
+              ไม่ได้ใช้งานนาน
+              <Sub>Inactive</Sub>
+            </Th>
+          </>
+        }
+        rowCount={departments.length}
+        emptyState={
+          <span className={`text-sm ${MUTED_TEXT}`}>
+            ไม่พบอุปกรณ์ที่ตรงกับตัวกรอง
+          </span>
+        }
+      >
+        {departments.map((row) => (
+          <tr
+            key={row.department}
+            className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40"
+          >
+            <td className="px-2.5 py-2 align-middle break-words font-medium text-zinc-900 dark:text-zinc-100">
+              <Link
+                href={`/devices/charts${buildQueryString(params, {
+                  department: row.department,
+                })}`}
+                className="rounded-sm hover:underline"
+              >
+                {row.department}
+              </Link>
+            </td>
+            <td className="px-2.5 py-2 text-right align-middle tabular-nums text-zinc-700 dark:text-zinc-300">
+              {formatNumber(row.total)}
+            </td>
+            <td className="px-2.5 py-2 align-middle">
+              <OnlineBar row={row} />
+            </td>
+            <WorkCount value={row.outdated} tone="warning" />
+            <WorkCount value={row.stale} tone="critical" />
+          </tr>
+        ))}
+      </DataTable>
     </Card>
   );
 }

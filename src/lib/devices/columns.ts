@@ -71,8 +71,29 @@ export const DEVICE_COLUMNS: DeviceColumn[] = [
   { key: "logonUser", label: "ผู้ล็อกอิน", english: "Logon User", kind: "text", width: 16, computerOnly: true },
 ];
 
+const COLUMNS_BY_KEY = new Map(
+  DEVICE_COLUMNS.map((column) => [column.key, column] as const),
+);
+
+/**
+ * Looks a column up by key, so the table, the detail panel and the export all
+ * reuse one set of labels.
+ *
+ * Was a linear `.find(...)!` run once per cell per row — a few thousand scans
+ * per page render, and a silent `undefined` that crashed somewhere else
+ * entirely if a key was ever mistyped. The map answers in constant time and
+ * says which key was wrong.
+ */
+export function columnFor(key: keyof Device): DeviceColumn {
+  const column = COLUMNS_BY_KEY.get(key);
+  if (!column) {
+    throw new Error(`ไม่พบคอลัมน์ "${String(key)}" ใน DEVICE_COLUMNS`);
+  }
+  return column;
+}
+
 /** The compact set shown in the on-screen table; the rest live in the export. */
-export const TABLE_COLUMN_KEYS: (keyof Device)[] = [
+const TABLE_COLUMN_KEYS: (keyof Device)[] = [
   "deviceName",
   "category",
   "brand",
@@ -87,9 +108,7 @@ export const TABLE_COLUMN_KEYS: (keyof Device)[] = [
   "online",
 ];
 
-export const TABLE_COLUMNS = TABLE_COLUMN_KEYS.map(
-  (key) => DEVICE_COLUMNS.find((column) => column.key === key)!,
-);
+export const TABLE_COLUMNS = TABLE_COLUMN_KEYS.map(columnFor);
 
 /**
  * The two work queues are separate tables — and separate worksheets — because
@@ -97,7 +116,7 @@ export const TABLE_COLUMNS = TABLE_COLUMN_KEYS.map(
  * where this machine went". Each carries only the columns its job needs, which
  * is also what lets both fit on screen without sideways scrolling.
  */
-export const OUTDATED_COLUMN_KEYS: (keyof Device)[] = [
+const OUTDATED_COLUMN_KEYS: (keyof Device)[] = [
   "deviceName",
   "ownerName",
   "department",
@@ -108,11 +127,9 @@ export const OUTDATED_COLUMN_KEYS: (keyof Device)[] = [
   "lastSeen",
 ];
 
-export const OUTDATED_COLUMNS = OUTDATED_COLUMN_KEYS.map(
-  (key) => DEVICE_COLUMNS.find((column) => column.key === key)!,
-);
+export const OUTDATED_COLUMNS = OUTDATED_COLUMN_KEYS.map(columnFor);
 
-export const STALE_COLUMN_KEYS: (keyof Device)[] = [
+const STALE_COLUMN_KEYS: (keyof Device)[] = [
   "deviceName",
   "ownerName",
   "department",
@@ -122,9 +139,7 @@ export const STALE_COLUMN_KEYS: (keyof Device)[] = [
   "daysSinceSeen",
 ];
 
-export const STALE_COLUMNS = STALE_COLUMN_KEYS.map(
-  (key) => DEVICE_COLUMNS.find((column) => column.key === key)!,
-);
+export const STALE_COLUMNS = STALE_COLUMN_KEYS.map(columnFor);
 
 /**
  * The full record, grouped for the panel that opens when a row is clicked.
@@ -187,12 +202,6 @@ export const DETAIL_SECTIONS: DetailSection[] = [
     keys: ["memoryGb", "storageGb", "lastBoot", "agentVersion", "logonUser"],
   },
 ];
-
-/** Looks a column up by key, so the detail panel reuses the labels the table
- *  and the export already agree on. */
-export function columnFor(key: keyof Device): DeviceColumn {
-  return DEVICE_COLUMNS.find((column) => column.key === key)!;
-}
 
 /**
  * Column widths as CSS percentages of the table. Paired with `table-fixed`,

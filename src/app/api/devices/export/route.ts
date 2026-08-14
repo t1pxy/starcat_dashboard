@@ -3,6 +3,14 @@ import type { NextRequest } from "next/server";
 import { buildDeviceWorkbook, exportFilename } from "@/lib/devices/excel";
 import { parseFilters, parseSort, type RawSearchParams } from "@/lib/devices/filters";
 import { getExportData } from "@/lib/devices/query";
+import { clientKey, rateLimit } from "@/lib/rate-limit";
+
+/**
+ * Generous enough that nobody doing their job will meet it — the office shares
+ * a handful of outbound addresses — but low enough that a retry loop stops
+ * hammering the helpdesk database within a minute.
+ */
+const EXPORT_LIMIT = { limit: 20, windowMs: 60_000 };
 
 /** `?brand=HP&brand=Dell` has to survive as an array, so collect duplicates. */
 function toRawParams(url: URL): RawSearchParams {
@@ -15,6 +23,17 @@ function toRawParams(url: URL): RawSearchParams {
 }
 
 export async function GET(request: NextRequest) {
+  const limit = rateLimit(clientKey(request), EXPORT_LIMIT);
+  if (!limit.ok) {
+    return Response.json(
+      { error: "ขอไฟล์ถี่เกินไป กรุณารอสักครู่แล้วลองใหม่" },
+      {
+        status: 429,
+        headers: { "Retry-After": String(limit.retryAfterSeconds) },
+      },
+    );
+  }
+
   const raw = toRawParams(new URL(request.url));
   const filters = parseFilters(raw);
   const sort = parseSort(raw);

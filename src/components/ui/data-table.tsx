@@ -1,4 +1,4 @@
-import { columnWidths, type DeviceColumn } from "@/lib/devices/columns";
+import { type DeviceColumn } from "@/lib/devices/columns";
 import { TONE_TABLE_HEAD, type Tone } from "./tone";
 
 /**
@@ -16,7 +16,9 @@ import { TONE_TABLE_HEAD, type Tone } from "./tone";
  * hidden and nothing is squeezed — the desktop layout is untouched.
  */
 export function DataTable({
-  columns,
+  /** One CSS width per column, as `columnWidths()` produces. Its length is the
+   *  column count, so the empty row knows how far to span. */
+  widths,
   tone = "neutral",
   /** Tailwind pair like `min-w-[64rem] lg:min-w-0` — the width below which this
    *  table scrolls rather than compresses. Depends on the column count. */
@@ -26,7 +28,7 @@ export function DataTable({
   emptyState,
   children,
 }: {
-  columns: DeviceColumn[];
+  widths: string[];
   tone?: Tone;
   minWidth: string;
   /** The `<th>` cells; the `<tr>` around them belongs to this component. */
@@ -35,8 +37,6 @@ export function DataTable({
   emptyState: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const widths = columnWidths(columns);
-
   return (
     <div className="overflow-x-auto">
       <table
@@ -44,7 +44,7 @@ export function DataTable({
       >
         <colgroup>
           {widths.map((width, index) => (
-            <col key={String(columns[index].key)} style={{ width }} />
+            <col key={index} style={{ width }} />
           ))}
         </colgroup>
         <thead className="border-y border-zinc-200 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
@@ -53,7 +53,7 @@ export function DataTable({
         <tbody>
           {rowCount === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="px-3 py-10 text-center">
+              <td colSpan={widths.length} className="px-3 py-10 text-center">
                 {emptyState}
               </td>
             </tr>

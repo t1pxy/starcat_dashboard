@@ -3,7 +3,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { ColumnHead, DataTable } from "@/components/ui/data-table";
 import { CardTitle } from "@/components/ui/typography";
 import { TONE_TEXT, type Tone } from "@/components/ui/tone";
-import { type DeviceColumn } from "@/lib/devices/columns";
+import { columnWidths, type DeviceColumn } from "@/lib/devices/columns";
 import { formatNumber } from "@/lib/devices/format";
 import type { Device } from "@/lib/devices/types";
 
@@ -49,7 +49,7 @@ export function QueueTable({
       </CardHeader>
 
       <DataTable
-        columns={columns}
+        widths={columnWidths(columns)}
         tone={tone}
         // Seven or eight columns need roughly 48rem before they stop being
         // readable; below that the table scrolls instead of compressing.

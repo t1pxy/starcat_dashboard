@@ -1,6 +1,7 @@
 import { DIMENSIONS } from "./dimensions";
 import { clampStaleDays, STALE_DAYS } from "./thresholds";
-import type { DeviceFilters, DeviceSort } from "./types";
+import { isSortable, type DeviceSort } from "./sorting";
+import type { DeviceFilters } from "./types";
 
 /** Raw `searchParams` as Next.js hands them to a page. */
 export type RawSearchParams = Record<string, string | string[] | undefined>;
@@ -126,11 +127,20 @@ export function staleThreshold(filters: DeviceFilters): number {
   return filters.staleDays ?? STALE_DAYS;
 }
 
+/**
+ * The sort in the URL, or nothing when it does not name a column the table can
+ * actually order by.
+ *
+ * This used to cast whatever string arrived straight to `keyof Device`, so the
+ * type claimed a guarantee nothing checked — the real protection was a
+ * whitelist further down in the query builder. Validating here makes the type
+ * honest and keeps the check in one place.
+ */
 export function parseSort(params: RawSearchParams): DeviceSort | undefined {
   const column = toString(params.sort);
-  if (!column) return undefined;
+  if (!column || !isSortable(column)) return undefined;
   return {
-    column: column as DeviceSort["column"],
+    column,
     direction: toString(params.dir) === "desc" ? "desc" : "asc",
   };
 }

@@ -3,42 +3,26 @@ import "server-only";
 import { query, queryBatch, sql, type QueryParam } from "@/lib/db";
 import { DIMENSIONS, type Dimension } from "./dimensions";
 import { staleThreshold } from "./filters";
-import { DEVICE_SOURCE, EXPIRING_SOON_DAYS } from "./schema";
+import { DEVICE_SOURCE } from "./schema";
+import { SORTABLE_COLUMNS, type DeviceSort } from "./sorting";
+import {
+  AGE_ANCIENT_YEARS,
+  AGE_OLD_YEARS,
+  CONTACT_OK_DAYS,
+  EXPIRING_SOON_DAYS,
+} from "./thresholds";
 import type {
   Breakdown,
   DepartmentHealth,
   Device,
   DeviceFilters,
   DeviceScope,
-  DeviceSort,
   Distributions,
   Facets,
   FacetValue,
   FleetComposition,
   Summary,
 } from "./types";
-
-/** Columns the UI may sort by. Anything not listed is ignored, so the value
- *  interpolated into ORDER BY can only ever be one of these literals. */
-const SORTABLE: Record<string, string> = {
-  deviceName: "deviceName",
-  assetNumber: "assetNumber",
-  deviceType: "deviceType",
-  category: "category",
-  brand: "brand",
-  model: "model",
-  department: "department",
-  location: "location",
-  ownerName: "ownerName",
-  buyDate: "buyDate",
-  ageYears: "ageYears",
-  warrantyEnd: "warrantyEnd",
-  warrantyDaysLeft: "warrantyDaysLeft",
-  lastSeen: "lastSeen",
-  daysSinceSeen: "daysSinceSeen",
-  windowsVersion: "windowsVersion",
-  online: "online",
-};
 
 /**
  * Names that follow the asset scheme — `25PDT001`: two-digit ค.ศ. year, P/R for
@@ -57,6 +41,57 @@ function nameMatchesScheme(prefix: string): string {
 }
 
 /**
+ * What counts as part of the fleet, before any user filter narrows it.
+ *
+ * Two rules, and they have to be applied identically everywhere or the page
+ * contradicts itself:
+ *
+ *   - Monitoring is about machines you can patch and reach, so the default
+ *     scope is computers. The equipment register has no OS, no agent and no
+ *     contact history, and leaving it in only dilutes every health figure.
+ *   - Computers whose name does not follow the asset scheme are spares, test
+ *     builds and hand-named one-offs (DESKTOP-VGKC2IQ, IHL-ADOBE). Counting
+ *     them made every fleet figure slightly wrong. Only computers are held to
+ *     it — no printer was ever going to be called 25PDT001.
+ *
+ * `loadFacets` used to apply only the first rule, which is why a dropdown could
+ * offer a brand that existed on no machine the page would actually show, with a
+ * count that never matched the result.
+ */
+function fleetConditions(scope: DeviceScope | undefined, prefix: string): string[] {
+  const conditions: string[] = [];
+  if (scope !== "all") conditions.push(`${prefix}deviceType = 'COMPUTER'`);
+  conditions.push(
+    `${prefix}deviceType <> 'COMPUTER' OR (${nameMatchesScheme(prefix)})`,
+  );
+  return conditions;
+}
+
+/**
+ * "Out of contact" — the one definition, used by all four things that speak it.
+ *
+ * A managed PC that has gone quiet for longer than the current threshold, or
+ * that has never reported at all. The KPI tile used to count neither the
+ * never-seen machines nor restrict itself to computers, while the queue beneath
+ * it and the per-department column did both — so under `?scope=all` the tile
+ * said 24 and the list under it showed 6, and both were describing "the same"
+ * set. A machine that has never checked in is the least accounted for of all,
+ * so it belongs in the count rather than outside it.
+ */
+function stalePredicate(prefix = ""): string {
+  return `${prefix}deviceType = 'COMPUTER'
+      AND (${prefix}daysSinceSeen IS NULL OR ${prefix}daysSinceSeen >= @staleThreshold)`;
+}
+
+const STALE_PREDICATE = stalePredicate();
+
+/** Escapes the three characters SQL Server treats as LIKE wildcards, using
+ *  backslash — which the `ESCAPE '\'` clause on every LIKE below declares. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_[]/g, (character) => `\\${character}`);
+}
+
+/**
  * Turns the filter object into a parameterised WHERE clause. Values are only
  * ever bound through `request.input`, never interpolated, so a department name
  * containing an apostrophe (or worse) cannot alter the statement.
@@ -68,21 +103,9 @@ function buildWhere(filters: DeviceFilters): {
   const conditions: string[] = [];
   const params: QueryParam[] = [];
 
-  // Scope first, so every other condition narrows within it. Monitoring is
-  // about machines you can patch and reach; the equipment register has no OS,
-  // no agent and no contact history, so leaving it in would only dilute every
-  // health figure on the page.
-  if (filters.scope !== "all") conditions.push("dev.deviceType = 'COMPUTER'");
-
-  // Machines whose name does not follow the asset scheme are not part of the
-  // managed fleet: they are spares, test builds and hand-named one-offs
-  // (DESKTOP-VGKC2IQ, IHL-ADOBE), and counting them made every fleet figure
-  // slightly wrong. Only computers are held to it — no printer was ever going
-  // to be called 25PDT001, and applying it to equipment would empty the
-  // "อุปกรณ์ทั้งหมด" view entirely.
-  conditions.push(
-    `dev.deviceType <> 'COMPUTER' OR (${nameMatchesScheme("dev.")})`,
-  );
+  // Scope and the naming rule first, so every other condition narrows within
+  // the same fleet the facets and the charts are counting.
+  conditions.push(...fleetConditions(filters.scope, "dev."));
 
   const addIn = (column: string, values: string[] | undefined) => {
     if (!values?.length) return;
@@ -97,20 +120,24 @@ function buildWhere(filters: DeviceFilters): {
   for (const dimension of DIMENSIONS) addIn(dimension, filters[dimension]);
 
   if (filters.search) {
+    // `%`, `_` and `[` are LIKE wildcards, so a search for "50%" or "C:\" used
+    // to match far more than the reader asked for — "%" on its own matched
+    // everything. Escaped here and declared with ESCAPE below, so the box
+    // searches for the characters that were typed.
     params.push({
       name: "search",
       type: sql.NVarChar(200),
-      value: `%${filters.search}%`,
+      value: `%${escapeLike(filters.search)}%`,
     });
     conditions.push(`(
-      dev.deviceName   LIKE @search OR
-      dev.assetNumber  LIKE @search OR
-      dev.serialNumber LIKE @search OR
-      dev.ownerName    LIKE @search OR
-      dev.ownerId      LIKE @search OR
-      dev.ipAddress    LIKE @search OR
-      dev.model        LIKE @search OR
-      dev.department   LIKE @search
+      dev.deviceName   LIKE @search ESCAPE '\\' OR
+      dev.assetNumber  LIKE @search ESCAPE '\\' OR
+      dev.serialNumber LIKE @search ESCAPE '\\' OR
+      dev.ownerName    LIKE @search ESCAPE '\\' OR
+      dev.ownerId      LIKE @search ESCAPE '\\' OR
+      dev.ipAddress    LIKE @search ESCAPE '\\' OR
+      dev.model        LIKE @search ESCAPE '\\' OR
+      dev.department   LIKE @search ESCAPE '\\'
     )`);
   }
 
@@ -129,13 +156,10 @@ function buildWhere(filters: DeviceFilters): {
   }
 
   if (filters.staleDays !== undefined) {
-    // Bound once by `materialise`, because the same threshold also decides what
-    // the summary tile counts and what the inactive queue lists.
-    // A device that never reported counts as stale too, otherwise the machines
-    // most in need of attention drop out of the list.
-    conditions.push(
-      "(dev.daysSinceSeen IS NULL OR dev.daysSinceSeen >= @staleThreshold)",
-    );
+    // The same predicate the tile, the queue and the department column use —
+    // `@staleThreshold` is bound once by `materialise`, because the threshold
+    // also decides what all three of those count.
+    conditions.push(stalePredicate("dev."));
   }
 
   if (filters.minAgeYears !== undefined) {
@@ -197,7 +221,7 @@ SELECT
   SUM(CASE WHEN windowsVersion IS NOT NULL
             AND windowsVersion < newestWindowsVersion
            THEN 1 ELSE 0 END)                                   AS outdatedWindows,
-  SUM(CASE WHEN daysSinceSeen >= @staleThreshold THEN 1 ELSE 0 END) AS staleAgents,
+  SUM(CASE WHEN ${STALE_PREDICATE} THEN 1 ELSE 0 END)            AS staleAgents,
   SUM(CASE WHEN warrantyDaysLeft < 0 THEN 1 ELSE 0 END)         AS warrantyExpired,
   SUM(CASE WHEN warrantyDaysLeft BETWEEN 0 AND ${EXPIRING_SOON_DAYS}
            THEN 1 ELSE 0 END)                                   AS warrantyExpiring90,
@@ -243,9 +267,7 @@ SELECT TOP 25
   SUM(CASE WHEN windowsVersion IS NOT NULL
             AND windowsVersion < newestWindowsVersion
            THEN 1 ELSE 0 END)                                  AS outdated,
-  SUM(CASE WHEN deviceType = 'COMPUTER'
-            AND (daysSinceSeen IS NULL OR daysSinceSeen >= @staleThreshold)
-           THEN 1 ELSE 0 END)                                  AS stale
+  SUM(CASE WHEN ${STALE_PREDICATE} THEN 1 ELSE 0 END)          AS stale
 FROM #dev
 GROUP BY department
 ORDER BY total DESC;`;
@@ -260,9 +282,9 @@ ORDER BY total DESC;`;
 // The threshold is tested *first* so the buckets stay in order however low it
 // is set: at `?stale=3` a machine five days quiet is lost, not "ปกติ".
 const CONTACT_BUCKET = `
-  CASE WHEN daysSinceSeen IS NULL            THEN 'never'
-       WHEN daysSinceSeen >= @staleThreshold THEN 'lost'
-       WHEN daysSinceSeen <= 7               THEN 'ok'
+  CASE WHEN daysSinceSeen IS NULL                THEN 'never'
+       WHEN daysSinceSeen >= @staleThreshold     THEN 'lost'
+       WHEN daysSinceSeen <= ${CONTACT_OK_DAYS}  THEN 'ok'
        ELSE 'slow' END`;
 
 const WARRANTY_BUCKET = `
@@ -276,13 +298,13 @@ const WINDOWS_BUCKET = `
        WHEN windowsVersion < newestWindowsVersion THEN 'behind'
        ELSE 'current' END`;
 
-// Age buckets are cut where the replacement conversation changes, not at even
-// intervals: under five years is simply fine, five to seven is "start budgeting",
-// and past seven the machine is a replacement candidate.
+// Boundaries come from `thresholds.ts`, which is also where `status.ts` reads
+// them to build the Thai labels — a bar drawn at one cut-off under a legend
+// naming another is worse than no bar at all.
 const AGE_BUCKET = `
-  CASE WHEN ageYears IS NULL THEN 'unknown'
-       WHEN ageYears < 5     THEN 'new'
-       WHEN ageYears < 7     THEN 'old'
+  CASE WHEN ageYears IS NULL                THEN 'unknown'
+       WHEN ageYears < ${AGE_OLD_YEARS}     THEN 'new'
+       WHEN ageYears < ${AGE_ANCIENT_YEARS} THEN 'old'
        ELSE 'ancient' END`;
 
 const DISTRIBUTION_SELECT = `
@@ -346,9 +368,7 @@ const OUTDATED_ORDER = `
   ORDER BY windowsVersion ASC,
            CASE WHEN deviceName IS NULL THEN 1 ELSE 0 END, deviceName ASC`;
 
-const STALE_WHERE = `
-  deviceType = 'COMPUTER'
-  AND (daysSinceSeen IS NULL OR daysSinceSeen >= @staleThreshold)`;
+const STALE_WHERE = STALE_PREDICATE;
 
 const STALE_ORDER = `
   ORDER BY CASE WHEN daysSinceSeen IS NULL THEN 0 ELSE 1 END,
@@ -356,7 +376,11 @@ const STALE_ORDER = `
            CASE WHEN deviceName IS NULL THEN 1 ELSE 0 END, deviceName ASC`;
 
 function orderBy(sort: DeviceSort | undefined): string {
-  const column = sort && SORTABLE[sort.column] ? SORTABLE[sort.column] : "deviceName";
+  // `parseSort` has already rejected anything not on the list; checking again
+  // here is what keeps that true for any other caller, since this is the one
+  // place a column name is interpolated rather than bound.
+  const column =
+    sort && SORTABLE_COLUMNS.includes(sort.column) ? sort.column : "deviceName";
   const direction = sort?.direction === "desc" ? "DESC" : "ASC";
   // NULLs last regardless of direction: blank names are noise, not data.
   return `ORDER BY CASE WHEN ${column} IS NULL THEN 1 ELSE 0 END, ${column} ${direction}, agentId`;
@@ -653,10 +677,20 @@ export async function getExportData(
 }
 
 /**
- * Filter options are identical for every visitor and every filter combination,
- * but computing them means scanning the whole source. A short in-process TTL
- * keeps the dropdowns responsive; a minute of staleness in a list of brand
- * names costs nothing, and the counts beside them are indicative anyway.
+ * Why this is the only cache in the dashboard.
+ *
+ * Every page here is a live reading of the helpdesk database, and that is the
+ * product: somebody looks at the wall display to find out whether a machine is
+ * answering *now*. A `revalidate` window would mean the screen quietly showing
+ * a state the fleet has already left, which is the one failure this dashboard
+ * cannot have — so the pages stay fully dynamic on purpose, and `LiveRefresh`
+ * states when the data was read rather than pretending it is current.
+ *
+ * Filter options are the exception. They are identical for every visitor and
+ * every filter combination, but computing them means scanning the whole source.
+ * A short in-process TTL keeps the dropdowns responsive; a minute of staleness
+ * in a list of brand names costs nothing, and the counts beside them are
+ * indicative anyway.
  *
  * Deliberately not `use cache`: that would require enabling Cache Components,
  * which changes rendering semantics for the entire app.
@@ -690,8 +724,11 @@ export function getFacets(scope: DeviceScope = "computers"): Promise<Facets> {
  * select it.
  */
 async function loadFacets(scope: DeviceScope): Promise<Facets> {
-  const scopeWhere =
-    scope === "all" ? "" : " WHERE deviceType = 'COMPUTER'";
+  // The same fleet the page counts, not merely the same scope — otherwise a
+  // dropdown offers a model that exists only on machines the page filters out.
+  const fleetWhere = ` WHERE ${fleetConditions(scope, "")
+    .map((condition) => `(${condition})`)
+    .join(" AND ")}`;
 
   const unions = DIMENSIONS.map(
     (dimension) =>
@@ -700,7 +737,7 @@ async function loadFacets(scope: DeviceScope): Promise<Facets> {
   ).join("\n  UNION ALL\n  ");
 
   const rows = await query<{ dim: Dimension; label: string; cnt: number }>(
-    `WITH src AS (SELECT * FROM (${DEVICE_SOURCE}) AS d${scopeWhere})
+    `WITH src AS (SELECT * FROM (${DEVICE_SOURCE}) AS d${fleetWhere})
      ${unions}
      ORDER BY dim, cnt DESC, label ASC`,
   );

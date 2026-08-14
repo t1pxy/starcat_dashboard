@@ -1,0 +1,238 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+
+import { DeviceCell, PATCH_TONE } from "@/components/device-cell";
+import { MUTED_TEXT } from "@/components/ui/tone";
+import { Bilingual } from "@/components/ui/typography";
+import { columnFor, DETAIL_SECTIONS } from "@/lib/devices/columns";
+import { describeDeviceName, parseDeviceName } from "@/lib/devices/device-name";
+import {
+  EM_DASH,
+  formatDate,
+  formatDaysAgo,
+  formatGb,
+  formatNumber,
+  formatWarrantyDays,
+  formatYears,
+} from "@/lib/devices/format";
+import type { Device } from "@/lib/devices/types";
+import {
+  describePatchGap,
+  patchSeverity,
+  patchStatus,
+  REFERENCE_DATE,
+} from "@/lib/devices/windows-servicing";
+
+/**
+ * One device, read in full.
+ *
+ * A table row can only carry a dozen columns before it stops being readable, so
+ * the other twenty fields used to live only in the Excel export — you had to
+ * download a file to answer "what is the serial number of this one machine".
+ * This is the same record read a second way: one device, every field it has,
+ * grouped by the question it answers.
+ *
+ * Split out of `device-rows.tsx`, which was doing three unrelated jobs in one
+ * 320-line file: rendering table rows, holding the selection, and rendering
+ * this panel. The rows file now keeps only the first two.
+ *
+ * `showModal()` rather than the `open` attribute: it is what gives us the
+ * backdrop, the focus trap and Escape-to-close for free, instead of three
+ * hand-rolled approximations of them.
+ */
+export function DeviceDetailDialog({
+  device,
+  onClose,
+}: {
+  device: Device;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const parts = parseDeviceName(device.deviceName);
+  // Agent-collected fields are blank on anything that is not a managed PC, so a
+  // printer would otherwise show two sections of em dashes.
+  const isComputer = device.deviceType === "COMPUTER";
+
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+
+  return (
+    <dialog
+      ref={ref}
+      onClose={onClose}
+      aria-labelledby="device-detail-title"
+      // A <dialog> fills its own box, so a click that lands on the element
+      // itself (rather than on the panel inside it) is a click on the backdrop.
+      onClick={(event) => {
+        if (event.target === ref.current) ref.current?.close();
+      }}
+      className="m-auto w-[min(48rem,92vw)] rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 backdrop:bg-zinc-900/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+    >
+      <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-4 py-4 sm:px-5 dark:border-zinc-800">
+        <div className="min-w-0">
+          <h2 id="device-detail-title" className="text-base font-semibold break-words">
+            {device.deviceName}
+          </h2>
+          <p className={`mt-0.5 text-xs ${MUTED_TEXT}`}>
+            {[parts ? describeDeviceName(parts) : null, device.category]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => ref.current?.close()}
+          className="shrink-0 rounded-lg border border-zinc-300 px-2.5 py-1 text-xs text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500"
+        >
+          ปิด
+        </button>
+      </div>
+
+      <div className="max-h-[70vh] overflow-y-auto px-4 py-4 sm:px-5">
+        {isComputer ? <PatchSummary device={device} /> : null}
+
+        {DETAIL_SECTIONS.map((section) => {
+          const keys = section.keys.filter(
+            (key) => isComputer || !columnFor(key).computerOnly,
+          );
+          if (keys.length === 0) return null;
+
+          return (
+            <section key={section.title} className="mb-5 last:mb-0">
+              <h3 className="mb-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                {section.title}
+                <Bilingual className="ml-1.5">{section.english}</Bilingual>
+              </h3>
+              <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                {keys.map((key) => (
+                  <Field key={String(key)} device={device} field={key} />
+                ))}
+              </dl>
+            </section>
+          );
+        })}
+      </div>
+    </dialog>
+  );
+}
+
+/**
+ * Where this machine's Windows sits against Microsoft's own release history.
+ *
+ * Given its own block above the field grid because it is the one thing on the
+ * panel that is a *judgement* rather than a stored value — every row below is
+ * something Starcat recorded, this is what it means.
+ */
+function PatchSummary({ device }: { device: Device }) {
+  const status = patchStatus(device.osBuild, device.osUbr);
+  if (!status) return null;
+
+  const severity = patchSeverity(status);
+  const tone = {
+    unsupported: "border-red-300 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30",
+    critical: "border-red-300 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30",
+    warning: "border-amber-300 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30",
+    ok: "border-emerald-300 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30",
+  }[severity];
+
+  return (
+    <section className={`mb-5 rounded-lg border p-3 ${tone}`}>
+      <h3 className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+        ระดับแพตช์เทียบกับ Microsoft
+        <Bilingual className="ml-1.5">Patch level vs Microsoft</Bilingual>
+      </h3>
+
+      <p className={`mt-1 text-sm font-medium ${PATCH_TONE[severity]}`}>
+        {describePatchGap(status)}
+      </p>
+
+      <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+        <Pair label="เครื่องนี้" value={status.level} />
+        <Pair
+          label="ล่าสุดจาก Microsoft"
+          value={`${device.osBuild}.${status.latest.ubr}${
+            status.latest.kb ? ` (${status.latest.kb})` : ""
+          }`}
+        />
+        <Pair
+          label="แพตช์ที่เครื่องนี้ติดตั้ง"
+          value={
+            status.current
+              ? `${formatDate(status.current.date)}${status.current.kb ? ` · ${status.current.kb}` : ""}`
+              : "ไม่อยู่ในรายการของ Microsoft"
+          }
+        />
+        <Pair
+          label="Microsoft ออกอัพเดทถึง"
+          value={
+            status.unsupported
+              ? "หยุดออกอัพเดทแล้ว — ควรอัพเกรด Windows"
+              : status.endOfServicing
+                ? `${formatDate(status.endOfServicing)}${
+                    status.daysUntilEndOfServicing !== null
+                      ? ` (อีก ${formatNumber(status.daysUntilEndOfServicing)} วัน)`
+                      : ""
+                  }`
+                : EM_DASH
+          }
+        />
+      </dl>
+
+      <p className={`mt-2 text-[11px] ${MUTED_TEXT}`}>
+        อ้างอิงตารางรุ่นของ Microsoft ณ {formatDate(REFERENCE_DATE)} · อัพเดทด้วย
+        <code className="mx-1">pnpm windows:refresh</code>
+      </p>
+    </section>
+  );
+}
+
+function Pair({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3 border-b border-current/10 py-0.5">
+      <dt className={MUTED_TEXT}>{label}</dt>
+      <dd className="text-right tabular-nums text-zinc-800 dark:text-zinc-200">
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * One label/value pair. Bare numbers lose their meaning once they are out of a
+ * column with a unit in its header, so the four numeric fields carry their unit
+ * with them here; everything else renders exactly as the table renders it.
+ */
+function Field({ device, field }: { device: Device; field: keyof Device }) {
+  const column = columnFor(field);
+
+  return (
+    <div className="flex flex-col border-b border-zinc-100 py-1 dark:border-zinc-800/60">
+      <dt className={`text-[11px] ${MUTED_TEXT}`}>
+        {column.label}
+        <Bilingual className="ml-1">{column.english}</Bilingual>
+      </dt>
+      <dd className="text-sm break-words">
+        <DetailValue device={device} field={field} />
+      </dd>
+    </div>
+  );
+}
+
+function DetailValue({ device, field }: { device: Device; field: keyof Device }) {
+  switch (field) {
+    case "ageYears":
+      return <>{formatYears(device.ageYears)}</>;
+    case "warrantyDaysLeft":
+      return <>{formatWarrantyDays(device.warrantyDaysLeft)}</>;
+    case "daysSinceSeen":
+      return <>{formatDaysAgo(device.daysSinceSeen)}</>;
+    case "memoryGb":
+      return <>{formatGb(device.memoryGb)}</>;
+    case "storageGb":
+      return <>{formatGb(device.storageGb)}</>;
+    default:
+      return <DeviceCell device={device} column={columnFor(field)} />;
+  }
+}

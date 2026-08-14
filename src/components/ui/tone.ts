@@ -15,6 +15,11 @@
  * These are Tailwind class strings rather than the `--status-*` CSS variables
  * because they carry border/background/text together with their dark-mode
  * pairs; the variables stay where they are, filling chart geometry.
+ *
+ * `StatusTone` in `lib/devices/status.ts` is the chart-side counterpart. The two
+ * share three members and differ in the fourth: `"neutral"` here means "this
+ * number is not a judgement", while `"none"` there means "we do not know this
+ * row's state". See that file for why they are not merged.
  */
 export type Tone = "neutral" | "good" | "warning" | "critical";
 

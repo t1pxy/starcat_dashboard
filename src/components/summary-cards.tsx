@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Bilingual } from "@/components/ui/typography";
 import { MUTED_TEXT, TONE_SURFACE, TONE_TEXT, type Tone } from "@/components/ui/tone";
 import { formatNumber } from "@/lib/devices/format";
-import { EXPIRING_SOON_DAYS } from "@/lib/devices/schema";
+import { EXPIRING_SOON_DAYS } from "@/lib/devices/thresholds";
 import type { Summary } from "@/lib/devices/types";
 
 /**

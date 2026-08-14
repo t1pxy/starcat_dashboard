@@ -5,10 +5,11 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { MUTED_TEXT } from "@/components/ui/tone";
 import { CardTitle } from "@/components/ui/typography";
-import { TABLE_COLUMNS } from "@/lib/devices/columns";
+import { columnWidths, TABLE_COLUMNS } from "@/lib/devices/columns";
 import { buildQueryString, type RawSearchParams } from "@/lib/devices/filters";
 import { formatNumber } from "@/lib/devices/format";
-import type { Device, DeviceSort } from "@/lib/devices/types";
+import type { DeviceSort } from "@/lib/devices/sorting";
+import type { Device } from "@/lib/devices/types";
 
 /**
  * The Thai label, its English name and the sort arrow stack vertically rather
@@ -171,7 +172,7 @@ export function DeviceTable({
       </CardHeader>
 
       <DataTable
-        columns={TABLE_COLUMNS}
+        widths={columnWidths(TABLE_COLUMNS)}
         // Twelve columns need about 64rem before they stop being legible; below
         // that the table scrolls sideways rather than breaking every cell onto
         // eight lines.

@@ -139,8 +139,3 @@ export type FleetComposition = {
   /** Devices whose name does not follow the scheme and could not be decoded. */
   undecoded: number;
 };
-
-export type DeviceSort = {
-  column: keyof Device;
-  direction: "asc" | "desc";
-};

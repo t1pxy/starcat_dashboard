@@ -5,8 +5,9 @@
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 5174",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --hostname 0.0.0.0 --port 5174",
     "lint": "eslint",
+    "test": "node --conditions=react-server --import ./scripts/ts-resolve.mjs --test \"src/**/*.test.ts\"",
     "db:introspect": "node scripts/introspect-db.mjs",
     "windows:refresh": "node scripts/build-windows-releases.mjs"
   },

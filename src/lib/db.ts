@@ -37,8 +37,12 @@ function readConfig(): sql.config {
     options: {
       ...(instanceName ? { instanceName } : {}),
       encrypt: process.env.MSSQL_ENCRYPT !== "false",
+      // Opt-in, not opt-out. Trusting whatever certificate the server presents
+      // removes the only thing `encrypt` was protecting against — an attacker
+      // in the middle can present their own — so it has to be an explicit
+      // decision per environment rather than what you get by saying nothing.
       trustServerCertificate:
-        process.env.MSSQL_TRUST_SERVER_CERTIFICATE !== "false",
+        process.env.MSSQL_TRUST_SERVER_CERTIFICATE === "true",
       // Helpdesk databases are usually Thai-collated; keep dates as JS Dates
       // rather than strings so formatting stays in our control.
       useUTC: false,

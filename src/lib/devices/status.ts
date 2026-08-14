@@ -1,4 +1,9 @@
-import { EXPIRING_SOON_DAYS } from "./schema";
+import {
+  AGE_ANCIENT_YEARS,
+  AGE_OLD_YEARS,
+  CONTACT_OK_DAYS,
+  EXPIRING_SOON_DAYS,
+} from "./thresholds";
 import type { BucketCounts } from "./types";
 
 /**
@@ -10,6 +15,18 @@ import type { BucketCounts } from "./types";
  * not know". Every segment also carries a written label, because on a white
  * surface amber sits below the 3:1 contrast line — colour is never the only
  * thing carrying the meaning.
+ *
+ * Related but deliberately not the same as `Tone` in `components/ui/tone.ts`,
+ * and the difference is the fourth member:
+ *
+ *   StatusTone."none"    — a chart segment for rows whose state is *unknown*
+ *                          (no purchase date, no agent reporting).
+ *   Tone."neutral"       — a card or number that carries no judgement at all.
+ *
+ * They also serve different mediums: these are raw CSS variables filling chart
+ * geometry, `Tone` is Tailwind class strings with light/dark pairs for component
+ * surfaces. A chart cannot use a class string and a card cannot fill an SVG, so
+ * merging them would mean one of the two constantly converting to the other.
  */
 export type StatusTone = "good" | "warning" | "critical" | "none";
 
@@ -54,14 +71,18 @@ export function distributionsFor(staleDays: number): DistributionSpec[] {
       title: "สถานะการติดต่อ",
       english: "Contact status",
       buckets: [
-        { id: "ok", label: "ปกติ (ไม่เกิน 7 วัน)", tone: "good" },
+        {
+          id: "ok",
+          label: `ปกติ (ไม่เกิน ${CONTACT_OK_DAYS} วัน)`,
+          tone: "good",
+        },
         {
           id: "slow",
           // Below about a week the middle band has no room left to describe, so
           // it is named rather than given a range that would read "8–4 วัน".
           label:
-            staleDays > 8
-              ? `เริ่มเงียบ (8–${staleDays - 1} วัน)`
+            staleDays > CONTACT_OK_DAYS + 1
+              ? `เริ่มเงียบ (${CONTACT_OK_DAYS + 1}–${staleDays - 1} วัน)`
               : "เริ่มเงียบ",
           tone: "warning",
         },
@@ -110,9 +131,17 @@ export function distributionsFor(staleDays: number): DistributionSpec[] {
       title: "อายุเครื่อง",
       english: "Device age",
       buckets: [
-        { id: "new", label: "ไม่เกิน 5 ปี", tone: "good" },
-        { id: "old", label: "5–7 ปี", tone: "warning" },
-        { id: "ancient", label: "เกิน 7 ปี — ควรพิจารณาเปลี่ยน", tone: "critical" },
+        { id: "new", label: `ไม่เกิน ${AGE_OLD_YEARS} ปี`, tone: "good" },
+        {
+          id: "old",
+          label: `${AGE_OLD_YEARS}–${AGE_ANCIENT_YEARS} ปี`,
+          tone: "warning",
+        },
+        {
+          id: "ancient",
+          label: `เกิน ${AGE_ANCIENT_YEARS} ปี — ควรพิจารณาเปลี่ยน`,
+          tone: "critical",
+        },
         { id: "unknown", label: "ไม่ทราบวันที่ซื้อ", tone: "none" },
       ],
     },

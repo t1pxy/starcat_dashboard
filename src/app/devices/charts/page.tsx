@@ -16,7 +16,7 @@ import {
   type RawSearchParams,
 } from "@/lib/devices/filters";
 import { getCharts, getFacets } from "@/lib/devices/query";
-import { STALE_DAYS } from "@/lib/devices/schema";
+import { STALE_DAYS } from "@/lib/devices/thresholds";
 import { bucketTotal, distributionsFor } from "@/lib/devices/status";
 
 export const metadata = {

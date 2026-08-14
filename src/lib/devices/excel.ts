@@ -9,7 +9,7 @@ import {
   type DeviceColumn,
 } from "./columns";
 import { staleThreshold } from "./filters";
-import { EXPIRING_SOON_DAYS } from "./schema";
+import { EXPIRING_SOON_DAYS } from "./thresholds";
 import type { Device, DeviceFilters, Summary } from "./types";
 
 const HEADER_FILL: ExcelJS.Fill = {
@@ -258,7 +258,8 @@ export async function buildDeviceWorkbook({
   return Buffer.from(buffer);
 }
 
-/** `รายงานอุปกรณ์_2026-08-13.xlsx`, safe for Content-Disposition. */
+/** `starcat-devices-2026-08-14.xlsx` — ASCII only, so it needs no encoding to
+ *  survive a `Content-Disposition` header. */
 export function exportFilename(): string {
   const stamp = new Date().toISOString().slice(0, 10);
   return `starcat-devices-${stamp}.xlsx`;

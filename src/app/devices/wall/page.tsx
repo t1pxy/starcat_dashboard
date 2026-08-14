@@ -3,7 +3,9 @@ import { Suspense } from "react";
 
 import { LiveRefresh } from "@/components/live-refresh";
 import { WallSkeleton } from "@/components/skeletons";
-import { TONE_ON_DARK, type Tone } from "@/components/ui/tone";
+import { Banner } from "@/components/wall/banner";
+import { QueuePanel } from "@/components/wall/queue-panel";
+import { Tile } from "@/components/wall/tile";
 import {
   countActiveFilters,
   parseFilters,
@@ -12,7 +14,7 @@ import {
 } from "@/lib/devices/filters";
 import { formatDaysAgo, formatNumber, formatText } from "@/lib/devices/format";
 import { getTables } from "@/lib/devices/query";
-import type { Device, Summary } from "@/lib/devices/types";
+import { EXPIRING_SOON_DAYS } from "@/lib/devices/thresholds";
 
 export const metadata = {
   title: "จอผนัง — Starcat Helpdesk",
@@ -35,164 +37,13 @@ export const metadata = {
  * The filters still travel in the URL, so a team can pin their own slice of the
  * fleet — `/devices/wall?department=IT-X` — using the same links as everywhere
  * else.
+ *
+ * The three pieces it is built from live in `components/wall/`, like every other
+ * view's components — this file is the page: fetch, arrange, and nothing else.
  */
-
-/**
- * Rows per queue. Sized so the whole screen fits a 1080p display without
- * scrolling — a wall display that has to be scrolled is showing the part nobody
- * will ever read. What does not fit is counted underneath instead.
- */
-const QUEUE_ROWS = 10;
 
 /** Matches `queueLimit` below, so a capped list can say that it is capped. */
 const QUEUE_LIMIT = 200;
-
-function Tile({
-  label,
-  english,
-  value,
-  caption,
-  tone,
-}: {
-  label: string;
-  english: string;
-  value: string;
-  caption?: string;
-  tone: Tone;
-}) {
-  return (
-    <div className={`rounded-2xl border p-5 ${TONE_ON_DARK[tone]}`}>
-      <div className="text-base font-medium text-zinc-300">
-        {label}
-        <span className="ml-2 text-sm font-normal text-zinc-500">{english}</span>
-      </div>
-      <div className="mt-1.5 text-5xl font-semibold tabular-nums tracking-tight">
-        {value}
-      </div>
-      {caption ? (
-        <div className="mt-1.5 text-sm text-zinc-400">{caption}</div>
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * The one line somebody glancing up from their desk actually reads. Green means
- * "nothing for you"; anything else names the work rather than just colouring
- * the screen, because a red banner that does not say what is red is a fire
- * alarm with no address.
- */
-function Banner({
-  summary,
-  staleDays,
-}: {
-  summary: Summary;
-  staleDays: number;
-}) {
-  const jobs = [
-    summary.staleAgents > 0
-      ? `ตามหา ${formatNumber(summary.staleAgents)} เครื่อง`
-      : null,
-    summary.outdatedWindows > 0
-      ? `อัพเดท Windows ${formatNumber(summary.outdatedWindows)} เครื่อง`
-      : null,
-    summary.warrantyExpired > 0
-      ? `ประกันหมดแล้ว ${formatNumber(summary.warrantyExpired)} เครื่อง`
-      : null,
-  ].filter(Boolean);
-
-  if (jobs.length === 0) {
-    return (
-      <div
-        className={`rounded-2xl border px-6 py-5 text-2xl font-medium ${TONE_ON_DARK.good}`}
-      >
-        ทุกเครื่องปกติ — ไม่มีงานค้าง
-        <span className="ml-3 text-lg font-normal text-emerald-500/80">
-          All clear
-        </span>
-      </div>
-    );
-  }
-
-  // Machines nobody can reach outrank machines that merely need patching: the
-  // first is a search, the second is a scheduled job.
-  const critical = summary.staleAgents > 0;
-
-  return (
-    <div
-      className={`rounded-2xl border px-6 py-5 ${
-        critical ? TONE_ON_DARK.critical : TONE_ON_DARK.warning
-      }`}
-    >
-      <div className="text-2xl font-medium">มีงานค้าง {jobs.join(" · ")}</div>
-      <div className="mt-1 text-base text-zinc-400">
-        นับ &quot;ไม่ติดต่อ&quot; ที่ {staleDays} วันขึ้นไป
-      </div>
-    </div>
-  );
-}
-
-function QueuePanel({
-  title,
-  english,
-  tone,
-  devices,
-  emptyLabel,
-  children,
-}: {
-  title: string;
-  english: string;
-  tone: Extract<Tone, "warning" | "critical">;
-  devices: Device[];
-  emptyLabel: string;
-  children: (device: Device) => React.ReactNode;
-}) {
-  const accent = tone === "critical" ? "text-red-300" : "text-amber-300";
-  // The query caps the list, so the count says "200+" rather than claiming the
-  // cap is the answer.
-  const capped = devices.length >= QUEUE_LIMIT;
-
-  return (
-    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
-      <div className="flex items-baseline justify-between gap-4">
-        <h2 className="text-xl font-semibold text-zinc-100">
-          {title}
-          <span className="ml-2 text-sm font-normal text-zinc-500">
-            {english}
-          </span>
-        </h2>
-        <span className={`text-2xl font-semibold tabular-nums ${accent}`}>
-          {formatNumber(devices.length)}
-          {capped ? "+" : ""}
-        </span>
-      </div>
-
-      {devices.length === 0 ? (
-        <p className="py-10 text-center text-lg text-emerald-400">
-          {emptyLabel}
-        </p>
-      ) : (
-        <ul className="mt-3 divide-y divide-zinc-800">
-          {devices.slice(0, QUEUE_ROWS).map((device) => (
-            <li
-              key={device.agentId}
-              className="flex items-baseline justify-between gap-4 py-2 text-lg"
-            >
-              {children(device)}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {devices.length > QUEUE_ROWS ? (
-        <p className="mt-3 text-sm text-zinc-500">
-          และอีก {formatNumber(devices.length - QUEUE_ROWS)}
-          {capped ? "+" : ""} เครื่อง — ดูทั้งหมดในหน้าตาราง
-        </p>
-      ) : null}
-    </section>
-  );
-}
 
 async function Wall({ params }: { params: RawSearchParams }) {
   const filters = parseFilters(params);
@@ -218,7 +69,7 @@ async function Wall({ params }: { params: RawSearchParams }) {
         <div>
           <h1 className="text-3xl font-semibold">
             สถานะอุปกรณ์
-            <span className="ml-3 text-lg font-normal text-zinc-500">
+            <span lang="en" className="ml-3 text-lg font-normal text-zinc-500">
               Starcat Helpdesk — Fleet status
             </span>
           </h1>
@@ -273,7 +124,7 @@ async function Wall({ params }: { params: RawSearchParams }) {
           label="ประกันหมดแล้ว"
           english="Warranty expired"
           value={formatNumber(summary.warrantyExpired)}
-          caption={`ใกล้หมดใน 90 วัน: ${formatNumber(summary.warrantyExpiring90)}`}
+          caption={`ใกล้หมดใน ${EXPIRING_SOON_DAYS} วัน: ${formatNumber(summary.warrantyExpiring90)}`}
           tone={
             summary.warrantyExpired > 0
               ? "critical"
@@ -291,6 +142,7 @@ async function Wall({ params }: { params: RawSearchParams }) {
           tone="critical"
           devices={stale}
           emptyLabel="ทุกเครื่องติดต่อเข้ามาตามปกติ 🎉"
+          limit={QUEUE_LIMIT}
         >
           {(device) => (
             <>
@@ -313,6 +165,7 @@ async function Wall({ params }: { params: RawSearchParams }) {
           tone="warning"
           devices={outdated}
           emptyLabel="ทุกเครื่องที่ติดต่อได้เป็นเวอร์ชันล่าสุดแล้ว 🎉"
+          limit={QUEUE_LIMIT}
         >
           {(device) => (
             <>

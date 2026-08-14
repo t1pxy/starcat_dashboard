@@ -17,7 +17,7 @@ import {
   type RawSearchParams,
 } from "@/lib/devices/filters";
 import { getFacets, getTables } from "@/lib/devices/query";
-import { STALE_DAYS } from "@/lib/devices/schema";
+import { STALE_DAYS } from "@/lib/devices/thresholds";
 
 export const metadata = {
   title: "ตารางอุปกรณ์ — Starcat Helpdesk",
