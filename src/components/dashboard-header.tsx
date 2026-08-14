@@ -1,8 +1,10 @@
 import Link from "next/link";
 
+import { ExportButton } from "@/components/export-button";
 import { LiveRefresh } from "@/components/live-refresh";
+import { MUTED_TEXT } from "@/components/ui/tone";
+import { Bilingual, PageTitle } from "@/components/ui/typography";
 import { buildQueryString, type RawSearchParams } from "@/lib/devices/filters";
-import { formatNumber } from "@/lib/devices/format";
 
 /**
  * Title, view switcher and export button, shared by both routes.
@@ -41,52 +43,21 @@ export function DashboardHeader({
   const query = buildQueryString(params, { sort: null, dir: null, page: null });
 
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-          Dashboard อุปกรณ์
-          <span className="ml-2 text-sm font-normal text-zinc-400 dark:text-zinc-500">
-            Starcat Helpdesk — Device Dashboard
-          </span>
-        </h1>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+    <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+      <div className="min-w-0">
+        <PageTitle
+          title="Dashboard อุปกรณ์"
+          english="Starcat Helpdesk — Device Dashboard"
+        />
+        <div
+          className={`mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs ${MUTED_TEXT}`}
+        >
           <LiveRefresh fetchedAt={fetchedAt} />
-          <span className="text-zinc-400 dark:text-zinc-500">
-            ตัวกรองมีผลกับทุกหน้า ทั้งกราฟ ตาราง และไฟล์ Excel
-          </span>
+          <span>ตัวกรองมีผลกับทุกหน้า ทั้งกราฟ ตาราง และไฟล์ Excel</span>
         </div>
-
-        <nav aria-label="มุมมอง" className="mt-3 flex gap-1">
-          {VIEWS.map((view) => {
-            const current = view.id === active;
-            return (
-              <Link
-                key={view.id}
-                href={`${view.href}${query}`}
-                aria-current={current ? "page" : undefined}
-                className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                  current
-                    ? "bg-zinc-900 font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-                    : "text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                }`}
-              >
-                {view.label}
-                <span
-                  className={`ml-1.5 text-xs font-normal ${
-                    current
-                      ? "text-zinc-400 dark:text-zinc-500"
-                      : "text-zinc-400 dark:text-zinc-600"
-                  }`}
-                >
-                  {view.english}
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {/* The wall view carries the filters across too, so a team can put
             "their" slice of the fleet on the screen behind them. */}
         <Link
@@ -95,18 +66,46 @@ export function DashboardHeader({
         >
           <span aria-hidden>◱</span>
           จอผนัง
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">Wall</span>
+          <Bilingual className="text-xs">Wall</Bilingual>
         </Link>
 
-        <a
+        <ExportButton
           href={`/api/devices/export${buildQueryString(params, { page: null })}`}
-          className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-600 px-4 text-sm font-medium text-white hover:bg-emerald-700"
-        >
-          <span aria-hidden>⤓</span>
-          Export Excel
-          <span className="text-emerald-200">({formatNumber(total)})</span>
-        </a>
+          total={total}
+        />
       </div>
-    </div>
+
+      {/*
+        The view switcher sits on its own row below the title so it keeps a full
+        line to itself on narrow screens instead of competing with the two
+        buttons for the same one.
+      */}
+      <nav aria-label="มุมมอง" className="flex w-full gap-1">
+        {VIEWS.map((view) => {
+          const current = view.id === active;
+          return (
+            <Link
+              key={view.id}
+              href={`${view.href}${query}`}
+              aria-current={current ? "page" : undefined}
+              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                current
+                  ? "bg-zinc-900 font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+                  : "text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              }`}
+            >
+              {view.label}
+              <Bilingual
+                className={`ml-1.5 text-xs ${
+                  current ? "text-zinc-400 dark:text-zinc-500" : ""
+                }`}
+              >
+                {view.english}
+              </Bilingual>
+            </Link>
+          );
+        })}
+      </nav>
+    </header>
   );
 }

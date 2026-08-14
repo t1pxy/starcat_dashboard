@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import { Card } from "@/components/ui/card";
+import { MUTED_TEXT } from "@/components/ui/tone";
+import { CardTitle } from "@/components/ui/typography";
 import { buildQueryString, type RawSearchParams } from "@/lib/devices/filters";
 import { formatNumber } from "@/lib/devices/format";
 import type { Breakdown } from "@/lib/devices/types";
@@ -14,7 +17,7 @@ import type { Breakdown } from "@/lib/devices/types";
  * Bars are horizontal because the labels here (department names, models) are
  * long text — vertical bars would force rotated labels.
  */
-/** Matches the label `getDashboard` substitutes for a NULL dimension value. */
+/** Matches the label the query substitutes for a NULL dimension value. */
 const UNKNOWN_LABEL = "ไม่ระบุ";
 
 export function BreakdownChart({
@@ -60,16 +63,11 @@ export function BreakdownChart({
   return (
     // `min-w-0` keeps a long label from setting a floor on this card's width
     // and pushing the whole grid past the edge of the page.
-    <section className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-        {title}
-        <span className="ml-1.5 text-xs font-normal text-zinc-400 dark:text-zinc-500">
-          {english}
-        </span>
-      </h2>
+    <Card className="min-w-0 p-4">
+      <CardTitle title={title} english={english} />
 
       {known.length === 0 ? (
-        <p className="mt-6 text-sm text-zinc-500 dark:text-zinc-400">{emptyLabel}</p>
+        <p className={`mt-6 text-sm ${MUTED_TEXT}`}>{emptyLabel}</p>
       ) : (
         <ul className="mt-3 space-y-1.5">
           {known.map((entry) => {
@@ -78,7 +76,7 @@ export function BreakdownChart({
             const row = (
               <>
                 <span
-                  className={`w-32 shrink-0 truncate text-xs ${
+                  className={`w-24 shrink-0 truncate text-xs sm:w-32 ${
                     active
                       ? "font-medium text-sky-700 dark:text-sky-300"
                       : "text-zinc-600 dark:text-zinc-400"
@@ -104,7 +102,6 @@ export function BreakdownChart({
                 {filterKey ? (
                   <Link
                     href={hrefFor(entry.label)}
-                    aria-pressed={active}
                     className={`flex items-center gap-2 rounded px-1 py-0.5 ${
                       active
                         ? "bg-sky-50 dark:bg-sky-950/40"
@@ -112,6 +109,13 @@ export function BreakdownChart({
                     }`}
                   >
                     {row}
+                    {/*
+                      A link is not a toggle button, so `aria-pressed` was never
+                      valid here — the state has to be readable as text instead.
+                    */}
+                    <span className="sr-only">
+                      {active ? "กำลังกรองด้วยค่านี้ — เลือกเพื่อเอาออก" : "เลือกเพื่อกรองด้วยค่านี้"}
+                    </span>
                   </Link>
                 ) : (
                   <div className="flex items-center gap-2 px-1 py-0.5">{row}</div>
@@ -123,17 +127,17 @@ export function BreakdownChart({
       )}
 
       {unknown ? (
-        <p className="mt-3 border-t border-zinc-100 pt-2 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+        <p
+          className={`mt-3 border-t border-zinc-100 pt-2 text-xs dark:border-zinc-800 ${MUTED_TEXT}`}
+        >
           ไม่ระบุ{" "}
           <span className="font-medium tabular-nums text-zinc-700 dark:text-zinc-300">
             {formatNumber(unknown.count)}
           </span>{" "}
           รายการ
-          <span className="ml-1 text-zinc-400 dark:text-zinc-500">
-            (ไม่นับรวมในกราฟ)
-          </span>
+          <span className="ml-1">(ไม่นับรวมในกราฟ)</span>
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }

@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+import { Card, CardHeader } from "@/components/ui/card";
+import { MUTED_TEXT, PLACEHOLDER_TEXT, TONE_TEXT, type Tone } from "@/components/ui/tone";
+import { Bilingual, CardTitle } from "@/components/ui/typography";
 import { buildQueryString, type RawSearchParams } from "@/lib/devices/filters";
 import { formatNumber } from "@/lib/devices/format";
 import { STATUS_COLOR } from "@/lib/devices/status";
@@ -23,94 +26,92 @@ export function DepartmentHealthTable({
   params: RawSearchParams;
 }) {
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3">
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            สถานะอุปกรณ์แยกตามหน่วยงาน
-            <span className="ml-1.5 text-xs font-normal text-zinc-400 dark:text-zinc-500">
-              Fleet health by department
-            </span>
-          </h2>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-            คลิกชื่อหน่วยงานเพื่อกรองทั้ง dashboard เฉพาะหน่วยงานนั้น
-          </p>
-        </div>
+    <Card>
+      <CardHeader>
+        <CardTitle
+          title="สถานะอุปกรณ์แยกตามหน่วยงาน"
+          english="Fleet health by department"
+          hint="คลิกชื่อหน่วยงานเพื่อกรองทั้ง dashboard เฉพาะหน่วยงานนั้น"
+        />
         <Legend />
-      </div>
+      </CardHeader>
 
-      <table className="w-full table-fixed border-collapse text-xs">
-        <colgroup>
-          <col style={{ width: "22%" }} />
-          <col style={{ width: "8%" }} />
-          <col style={{ width: "40%" }} />
-          <col style={{ width: "15%" }} />
-          <col style={{ width: "15%" }} />
-        </colgroup>
-        <thead className="border-y border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-400">
-          <tr>
-            <Th>
-              หน่วยงาน
-              <Sub>Department</Sub>
-            </Th>
-            <Th align="right">
-              ทั้งหมด
-              <Sub>Total</Sub>
-            </Th>
-            <Th>
-              ออนไลน์ / ออฟไลน์
-              <Sub>Online / Offline</Sub>
-            </Th>
-            <Th align="right">
-              ต้องอัพเดท
-              <Sub>Needs update</Sub>
-            </Th>
-            <Th align="right">
-              ไม่ได้ใช้งานนาน
-              <Sub>Inactive</Sub>
-            </Th>
-          </tr>
-        </thead>
-        <tbody>
-          {departments.length === 0 ? (
+      {/* Five columns, one of them a bar — below ~36rem they stop being
+          readable, so the table scrolls rather than compressing. */}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[36rem] table-fixed border-collapse text-xs sm:min-w-0">
+          <colgroup>
+            <col style={{ width: "22%" }} />
+            <col style={{ width: "8%" }} />
+            <col style={{ width: "40%" }} />
+            <col style={{ width: "15%" }} />
+            <col style={{ width: "15%" }} />
+          </colgroup>
+          <thead className="border-y border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-400">
             <tr>
-              <td
-                colSpan={5}
-                className="px-3 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400"
-              >
-                ไม่พบอุปกรณ์ที่ตรงกับตัวกรอง
-              </td>
+              <Th>
+                หน่วยงาน
+                <Sub>Department</Sub>
+              </Th>
+              <Th align="right">
+                ทั้งหมด
+                <Sub>Total</Sub>
+              </Th>
+              <Th>
+                ออนไลน์ / ออฟไลน์
+                <Sub>Online / Offline</Sub>
+              </Th>
+              <Th align="right">
+                ต้องอัพเดท
+                <Sub>Needs update</Sub>
+              </Th>
+              <Th align="right">
+                ไม่ได้ใช้งานนาน
+                <Sub>Inactive</Sub>
+              </Th>
             </tr>
-          ) : (
-            departments.map((row) => (
-              <tr
-                key={row.department}
-                className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40"
-              >
-                <td className="px-2.5 py-2 align-middle break-words font-medium text-zinc-900 dark:text-zinc-100">
-                  <Link
-                    href={`/devices/charts${buildQueryString(params, {
-                      department: row.department,
-                    })}`}
-                    className="hover:underline"
-                  >
-                    {row.department}
-                  </Link>
+          </thead>
+          <tbody>
+            {departments.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={5}
+                  className={`px-3 py-10 text-center text-sm ${MUTED_TEXT}`}
+                >
+                  ไม่พบอุปกรณ์ที่ตรงกับตัวกรอง
                 </td>
-                <td className="px-2.5 py-2 text-right align-middle tabular-nums text-zinc-700 dark:text-zinc-300">
-                  {formatNumber(row.total)}
-                </td>
-                <td className="px-2.5 py-2 align-middle">
-                  <OnlineBar row={row} />
-                </td>
-                <WorkCount value={row.outdated} tone="warning" />
-                <WorkCount value={row.stale} tone="critical" />
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </section>
+            ) : (
+              departments.map((row) => (
+                <tr
+                  key={row.department}
+                  className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40"
+                >
+                  <td className="px-2.5 py-2 align-middle break-words font-medium text-zinc-900 dark:text-zinc-100">
+                    <Link
+                      href={`/devices/charts${buildQueryString(params, {
+                        department: row.department,
+                      })}`}
+                      className="rounded-sm hover:underline"
+                    >
+                      {row.department}
+                    </Link>
+                  </td>
+                  <td className="px-2.5 py-2 text-right align-middle tabular-nums text-zinc-700 dark:text-zinc-300">
+                    {formatNumber(row.total)}
+                  </td>
+                  <td className="px-2.5 py-2 align-middle">
+                    <OnlineBar row={row} />
+                  </td>
+                  <WorkCount value={row.outdated} tone="warning" />
+                  <WorkCount value={row.stale} tone="critical" />
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 
@@ -135,9 +136,7 @@ function Th({
 
 function Sub({ children }: { children: React.ReactNode }) {
   return (
-    <span className="block text-[10px] leading-tight font-normal text-zinc-400 dark:text-zinc-500">
-      {children}
-    </span>
+    <Bilingual className="block text-[11px] leading-tight">{children}</Bilingual>
   );
 }
 
@@ -175,7 +174,7 @@ function OnlineBar({ row }: { row: Row }) {
           />
         ) : null}
       </div>
-      <span className="w-20 shrink-0 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+      <span className={`w-20 shrink-0 text-right tabular-nums ${MUTED_TEXT}`}>
         {formatNumber(row.online)} / {formatNumber(row.offline)}
       </span>
     </div>
@@ -188,19 +187,16 @@ function WorkCount({
   tone,
 }: {
   value: number;
-  tone: "warning" | "critical";
+  tone: Extract<Tone, "warning" | "critical">;
 }) {
-  const classes =
-    tone === "warning"
-      ? "text-amber-700 dark:text-amber-300"
-      : "text-red-700 dark:text-red-300";
-
   return (
     <td className="px-2.5 py-2 text-right align-middle tabular-nums">
       {value === 0 ? (
-        <span className="text-zinc-300 dark:text-zinc-600">—</span>
+        <span className={PLACEHOLDER_TEXT}>—</span>
       ) : (
-        <span className={`font-medium ${classes}`}>{formatNumber(value)}</span>
+        <span className={`font-medium ${TONE_TEXT[tone]}`}>
+          {formatNumber(value)}
+        </span>
       )}
     </td>
   );
@@ -208,7 +204,7 @@ function WorkCount({
 
 function Legend() {
   return (
-    <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+    <ul className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs ${MUTED_TEXT}`}>
       {[
         { label: "ออนไลน์", color: STATUS_COLOR.good },
         { label: "ออฟไลน์", color: STATUS_COLOR.none },

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { DeviceCell, PATCH_TONE } from "@/components/device-cell";
+import { MUTED_TEXT } from "@/components/ui/tone";
+import { Bilingual } from "@/components/ui/typography";
 import {
   columnFor,
   DETAIL_SECTIONS,
@@ -142,6 +144,7 @@ function DeviceDetailDialog({
     <dialog
       ref={ref}
       onClose={onClose}
+      aria-labelledby="device-detail-title"
       // A <dialog> fills its own box, so a click that lands on the element
       // itself (rather than on the panel inside it) is a click on the backdrop.
       onClick={(event) => {
@@ -149,10 +152,12 @@ function DeviceDetailDialog({
       }}
       className="m-auto w-[min(48rem,92vw)] rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 backdrop:bg-zinc-900/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
     >
-      <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
-        <div>
-          <h2 className="text-base font-semibold">{device.deviceName}</h2>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+      <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-4 py-4 sm:px-5 dark:border-zinc-800">
+        <div className="min-w-0">
+          <h2 id="device-detail-title" className="text-base font-semibold break-words">
+            {device.deviceName}
+          </h2>
+          <p className={`mt-0.5 text-xs ${MUTED_TEXT}`}>
             {[parts ? describeDeviceName(parts) : null, device.category]
               .filter(Boolean)
               .join(" · ")}
@@ -161,13 +166,13 @@ function DeviceDetailDialog({
         <button
           type="button"
           onClick={() => ref.current?.close()}
-          className="rounded-lg border border-zinc-300 px-2.5 py-1 text-xs text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500"
+          className="shrink-0 rounded-lg border border-zinc-300 px-2.5 py-1 text-xs text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500"
         >
           ปิด
         </button>
       </div>
 
-      <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
+      <div className="max-h-[70vh] overflow-y-auto px-4 py-4 sm:px-5">
         {isComputer ? <PatchSummary device={device} /> : null}
 
         {DETAIL_SECTIONS.map((section) => {
@@ -178,11 +183,9 @@ function DeviceDetailDialog({
 
           return (
             <section key={section.title} className="mb-5 last:mb-0">
-              <h3 className="mb-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+              <h3 className="mb-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
                 {section.title}
-                <span className="ml-1.5 font-normal text-zinc-400 dark:text-zinc-500">
-                  {section.english}
-                </span>
+                <Bilingual className="ml-1.5">{section.english}</Bilingual>
               </h3>
               <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
                 {keys.map((key) => (
@@ -220,9 +223,7 @@ function PatchSummary({ device }: { device: Device }) {
     <section className={`mb-5 rounded-lg border p-3 ${tone}`}>
       <h3 className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
         ระดับแพตช์เทียบกับ Microsoft
-        <span className="ml-1.5 font-normal text-zinc-400 dark:text-zinc-500">
-          Patch level vs Microsoft
-        </span>
+        <Bilingual className="ml-1.5">Patch level vs Microsoft</Bilingual>
       </h3>
 
       <p className={`mt-1 text-sm font-medium ${PATCH_TONE[severity]}`}>
@@ -261,7 +262,7 @@ function PatchSummary({ device }: { device: Device }) {
         />
       </dl>
 
-      <p className="mt-2 text-[10px] text-zinc-400 dark:text-zinc-500">
+      <p className={`mt-2 text-[11px] ${MUTED_TEXT}`}>
         อ้างอิงตารางรุ่นของ Microsoft ณ {formatDate(REFERENCE_DATE)} · อัพเดทด้วย
         <code className="mx-1">pnpm windows:refresh</code>
       </p>
@@ -272,7 +273,7 @@ function PatchSummary({ device }: { device: Device }) {
 function Pair({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-3 border-b border-current/10 py-0.5">
-      <dt className="text-zinc-500 dark:text-zinc-400">{label}</dt>
+      <dt className={MUTED_TEXT}>{label}</dt>
       <dd className="text-right tabular-nums text-zinc-800 dark:text-zinc-200">
         {value}
       </dd>
@@ -290,11 +291,9 @@ function Field({ device, field }: { device: Device; field: keyof Device }) {
 
   return (
     <div className="flex flex-col border-b border-zinc-100 py-1 dark:border-zinc-800/60">
-      <dt className="text-[11px] text-zinc-500 dark:text-zinc-400">
+      <dt className={`text-[11px] ${MUTED_TEXT}`}>
         {column.label}
-        <span className="ml-1 text-zinc-400 dark:text-zinc-500">
-          {column.english}
-        </span>
+        <Bilingual className="ml-1">{column.english}</Bilingual>
       </dt>
       <dd className="text-sm break-words">
         <DetailValue device={device} field={field} />

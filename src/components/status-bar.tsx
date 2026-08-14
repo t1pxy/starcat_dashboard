@@ -1,3 +1,6 @@
+import { Card } from "@/components/ui/card";
+import { MUTED_TEXT } from "@/components/ui/tone";
+import { CardTitle } from "@/components/ui/typography";
 import { formatNumber } from "@/lib/devices/format";
 import { STATUS_COLOR, type StatusTone } from "@/lib/devices/status";
 
@@ -39,18 +42,11 @@ export function StatusBar({
     // `min-w-0` is load-bearing: a grid item defaults to min-width:auto, so
     // without it the longest label sets a floor on the card's width and the
     // whole row of cards pushes the page into a horizontal scroll.
-    <section className="min-w-0 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-        {title}
-        <span className="ml-1.5 text-xs font-normal text-zinc-400 dark:text-zinc-500">
-          {english}
-        </span>
-      </h3>
+    <Card className="min-w-0 p-4">
+      <CardTitle title={title} english={english} />
 
       {total === 0 ? (
-        <p className="mt-6 text-sm text-zinc-500 dark:text-zinc-400">
-          {emptyLabel}
-        </p>
+        <p className={`mt-6 text-sm ${MUTED_TEXT}`}>{emptyLabel}</p>
       ) : (
         <>
           {/* gap-0.5 is the 2px surface gap that keeps adjacent fills apart. */}
@@ -85,7 +81,7 @@ export function StatusBar({
                 <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
                   {formatNumber(segment.count)}
                 </span>
-                <span className="w-11 shrink-0 text-right tabular-nums text-zinc-400 dark:text-zinc-500">
+                <span className={`w-11 shrink-0 text-right tabular-nums ${MUTED_TEXT}`}>
                   {((segment.count / total) * 100).toFixed(1)}%
                 </span>
               </li>
@@ -95,10 +91,12 @@ export function StatusBar({
       )}
 
       {footnote ? (
-        <p className="mt-3 border-t border-zinc-100 pt-2 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+        <p
+          className={`mt-3 border-t border-zinc-100 pt-2 text-xs dark:border-zinc-800 ${MUTED_TEXT}`}
+        >
           {footnote}
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }

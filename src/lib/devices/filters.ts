@@ -1,19 +1,9 @@
-import { STALE_DAYS } from "./schema";
+import { DIMENSIONS } from "./dimensions";
+import { clampStaleDays, STALE_DAYS } from "./thresholds";
 import type { DeviceFilters, DeviceSort } from "./types";
 
 /** Raw `searchParams` as Next.js hands them to a page. */
 export type RawSearchParams = Record<string, string | string[] | undefined>;
-
-/** Multi-value filters travel as repeated params: `?brand=HP&brand=Dell`. */
-const MULTI_KEYS = [
-  "deviceType",
-  "category",
-  "brand",
-  "model",
-  "department",
-  "location",
-  "windowsVersion",
-] as const;
 
 function toArray(value: string | string[] | undefined): string[] | undefined {
   if (value === undefined) return undefined;
@@ -32,18 +22,46 @@ function toNumber(value: string | string[] | undefined): number | undefined {
 }
 
 /**
- * A whole number of days, as typed by a person.
+ * Bounds every number that reaches SQL.
  *
- * The silence threshold is the one filter whose value the user picks freely
- * rather than choosing from a list, so it is the one that has to survive
- * `?stale=abc`, `?stale=-5` and `?stale=1e9`. One day is the smallest span the
- * data can express (`daysSinceSeen` is whole days) and ten years is past the
- * age of anything in the register, so anything beyond that is a typo.
+ * `stale` was the only numeric parameter being clamped, so `?page=1e21`,
+ * `?warrantyWithin=99999999999` and `?minAge=9999999` each reached the driver as
+ * a value it could not represent and threw — turning a typo in the address bar
+ * into a 500 error page. The bounds below are the widest the destination SQL
+ * type can hold, so no value that works today is altered; only the ones that
+ * used to crash are brought back inside the range.
  */
-function toDayCount(value: string | string[] | undefined): number | undefined {
+const SQL_INT_MIN = -2_147_483_648;
+const SQL_INT_MAX = 2_147_483_647;
+
+/** `warrantyDaysLeft` is compared against a `DECIMAL(5,1)`, which tops out at
+ *  9999.9 — beyond that the driver rejects the parameter outright. */
+const AGE_YEARS_LIMIT = 9999.9;
+
+/** Offsets stay inside `int` at any page a person could plausibly reach; fifty
+ *  million rows past the start is already far beyond the register's size. */
+const MAX_PAGE = 1_000_000;
+
+function toBoundedInt(
+  value: string | string[] | undefined,
+  min: number,
+  max: number,
+): number | undefined {
   const parsed = toNumber(value);
   if (parsed === undefined) return undefined;
-  return Math.min(3650, Math.max(1, Math.trunc(parsed)));
+  return Math.min(max, Math.max(min, Math.trunc(parsed)));
+}
+
+/** Same bounding, without the truncation — `?minAge=5.5` is a meaningful
+ *  half-year that the destination decimal column can hold. */
+function toBoundedDecimal(
+  value: string | string[] | undefined,
+  min: number,
+  max: number,
+): number | undefined {
+  const parsed = toNumber(value);
+  if (parsed === undefined) return undefined;
+  return Math.min(max, Math.max(min, parsed));
 }
 
 function toString(value: string | string[] | undefined): string | undefined {
@@ -60,7 +78,8 @@ export function parseFilters(params: RawSearchParams): DeviceFilters {
   // "active filter" the user has to clear.
   if (toString(params.scope) === "all") filters.scope = "all";
 
-  for (const key of MULTI_KEYS) {
+  // Multi-value filters travel as repeated params: `?brand=HP&brand=Dell`.
+  for (const key of DIMENSIONS) {
     const values = toArray(params[key]);
     if (values) filters[key] = values;
   }
@@ -70,9 +89,21 @@ export function parseFilters(params: RawSearchParams): DeviceFilters {
   const online = toString(params.online);
   if (online === "true" || online === "false") filters.online = online;
 
-  filters.warrantyWithinDays = toNumber(params.warrantyWithin);
-  filters.staleDays = toDayCount(params.stale);
-  filters.minAgeYears = toNumber(params.minAge);
+  filters.warrantyWithinDays = toBoundedInt(
+    params.warrantyWithin,
+    SQL_INT_MIN,
+    SQL_INT_MAX,
+  );
+  // Through the same clamp the filter bar's own number box uses, so the box
+  // cannot offer a value the server would silently rewrite.
+  const staleDays = toNumber(params.stale);
+  filters.staleDays =
+    staleDays === undefined ? undefined : clampStaleDays(staleDays);
+  filters.minAgeYears = toBoundedDecimal(
+    params.minAge,
+    -AGE_YEARS_LIMIT,
+    AGE_YEARS_LIMIT,
+  );
   if (toString(params.outdated) === "1") filters.outdatedOnly = true;
 
   // Strip undefined keys so `Object.keys(filters).length` is a truthful
@@ -105,7 +136,7 @@ export function parseSort(params: RawSearchParams): DeviceSort | undefined {
 }
 
 export function parsePage(params: RawSearchParams): number {
-  return Math.max(1, Math.trunc(toNumber(params.page) ?? 1));
+  return toBoundedInt(params.page, 1, MAX_PAGE) ?? 1;
 }
 
 /**

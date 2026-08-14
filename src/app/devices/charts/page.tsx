@@ -5,8 +5,10 @@ import { CompositionCharts } from "@/components/composition-charts";
 import { DashboardHeader } from "@/components/dashboard-header";
 import { DepartmentHealthTable } from "@/components/department-health";
 import { FilterBar } from "@/components/filter-bar";
+import { ChartsSkeleton } from "@/components/skeletons";
 import { StatusBar } from "@/components/status-bar";
 import { SummaryCards } from "@/components/summary-cards";
+import { SectionHeading } from "@/components/ui/typography";
 import {
   countActiveFilters,
   parseFilters,
@@ -23,14 +25,6 @@ export const metadata = {
     "สถานะอุปกรณ์แยกตามหน่วยงาน สถานะการติดต่อ ประกัน และองค์ประกอบของเครื่อง",
 };
 
-function Panel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-      {children}
-    </div>
-  );
-}
-
 /** The plain "how many of each" bars, kept below the monitoring views. They
  *  answer inventory questions rather than health questions. */
 const BREAKDOWNS = [
@@ -45,28 +39,6 @@ const BREAKDOWNS = [
   },
   { key: "deviceType", title: "แยกตามประเภท", english: "By type" },
 ] as const;
-
-function SectionTitle({
-  title,
-  english,
-  hint,
-}: {
-  title: string;
-  english: string;
-  hint: string;
-}) {
-  return (
-    <div className="pt-2">
-      <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-        {title}
-        <span className="ml-1.5 text-xs font-normal text-zinc-400 dark:text-zinc-500">
-          {english}
-        </span>
-      </h2>
-      <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{hint}</p>
-    </div>
-  );
-}
 
 /**
  * The charts live on their own route so the tables page stays a work surface
@@ -107,9 +79,15 @@ async function Charts({ params }: { params: RawSearchParams }) {
 
       <SummaryCards summary={data.summary} staleDays={staleDays} />
 
+      <SectionHeading
+        title="สถานะรายหน่วยงาน"
+        english="By department"
+        hint="หน่วยงานไหนมีงานค้างมากที่สุด เรียงตามจำนวนอุปกรณ์"
+      />
+
       <DepartmentHealthTable departments={data.departments} params={params} />
 
-      <SectionTitle
+      <SectionHeading
         title="สุขภาพของเครื่องทั้งหมด"
         english="Fleet health"
         hint="สัดส่วนของอุปกรณ์ทั้งหมดตามตัวกรองปัจจุบัน — เขียวคือปกติ เหลืองคือควรวางแผน แดงคือเลยกำหนดแล้ว"
@@ -134,9 +112,15 @@ async function Charts({ params }: { params: RawSearchParams }) {
         })}
       </div>
 
+      <SectionHeading
+        title="องค์ประกอบของเครื่อง"
+        english="Fleet composition"
+        hint="อ่านจากรูปแบบชื่อเครื่อง — ซื้อหรือเช่า ตั้งโต๊ะหรือโน้ตบุ๊ก และได้มาปีไหน"
+      />
+
       <CompositionCharts composition={data.composition} />
 
-      <SectionTitle
+      <SectionHeading
         title="จำนวนอุปกรณ์แยกตามมิติต่างๆ"
         english="Inventory breakdowns"
         hint="คลิกที่แถบเพื่อเพิ่ม/เอาตัวกรองนั้นออก"
@@ -167,7 +151,7 @@ export default async function ChartsPage({
 
   return (
     <main className="mx-auto w-full max-w-[1600px] p-4 lg:p-6">
-      <Suspense fallback={<Panel>กำลังโหลดข้อมูลจาก Starcat…</Panel>}>
+      <Suspense fallback={<ChartsSkeleton />}>
         <Charts params={params} />
       </Suspense>
     </main>

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { query, queryBatch, sql, type QueryParam } from "@/lib/db";
+import { DIMENSIONS, type Dimension } from "./dimensions";
 import { staleThreshold } from "./filters";
 import { DEVICE_SOURCE, EXPIRING_SOON_DAYS } from "./schema";
 import type {
@@ -38,19 +39,6 @@ const SORTABLE: Record<string, string> = {
   windowsVersion: "windowsVersion",
   online: "online",
 };
-
-/** Dimensions offered as filter dropdowns and as breakdown charts. */
-const DIMENSIONS = [
-  "deviceType",
-  "category",
-  "brand",
-  "model",
-  "department",
-  "location",
-  "windowsVersion",
-] as const;
-
-type Dimension = (typeof DIMENSIONS)[number];
 
 /**
  * Names that follow the asset scheme — `25PDT001`: two-digit ค.ศ. year, P/R for
@@ -374,10 +362,12 @@ function orderBy(sort: DeviceSort | undefined): string {
   return `ORDER BY CASE WHEN ${column} IS NULL THEN 1 ELSE 0 END, ${column} ${direction}, agentId`;
 }
 
-type RawDevice = Omit<Device, "online"> & {
-  online: boolean;
-  newestWindowsVersion: string | null;
-};
+/** A row straight off `#dev`: every `Device` field, plus the fleet-wide newest
+ *  Windows version the SELECT carries along, and dates still as `Date` objects. */
+type RawDevice = Device & { newestWindowsVersion: string | null };
+
+/** Result sets whose columns the caller does not model field by field. */
+type RawRows = Record<string, unknown>[];
 
 /** SQL Server hands back `Date` objects; the UI wants stable ISO strings. */
 function toIso(value: unknown): string | null {
@@ -545,31 +535,48 @@ export async function getTables(
 ): Promise<TablesData> {
   const { sort, page = 1, pageSize = 50, queueLimit = 200 } = options;
   const { prelude, params } = materialise(filters);
-  const offset = Math.max(0, (page - 1) * pageSize);
 
-  const [summaryRows, deviceRows, totalRows, outdatedRows, staleRows] =
-    await queryBatch(
-      `${prelude}
-       ${SUMMARY_SELECT}
-       SELECT * FROM #dev ${orderBy(sort)}
-         OFFSET ${offset} ROWS FETCH NEXT ${pageSize} ROWS ONLY;
-       SELECT COUNT(*) AS total FROM #dev;
-       SELECT TOP ${queueLimit} * FROM #dev
-         WHERE ${OUTDATED_WHERE}
-         ${OUTDATED_ORDER};
-       SELECT TOP ${queueLimit} * FROM #dev
-         WHERE ${STALE_WHERE}
-         ${STALE_ORDER};
-       DROP TABLE #dev;`,
-      params,
-    );
+  // Bound rather than interpolated. These are the only numbers in the whole
+  // dashboard that reach SQL from a URL, and pasting them into the statement as
+  // text meant `?page=1e21` arrived as the literal `OFFSET 1e+21 ROWS` — a
+  // syntax error, and a 500 page, from a typo in the address bar.
+  const paging: QueryParam[] = [
+    {
+      name: "offset",
+      type: sql.Int,
+      value: Math.max(0, (page - 1) * pageSize),
+    },
+    { name: "pageSize", type: sql.Int, value: pageSize },
+    { name: "queueLimit", type: sql.Int, value: queueLimit },
+  ];
+
+  const [summaryRows, deviceRows, outdatedRows, staleRows] = await queryBatch<
+    [RawRows, RawDevice[], RawDevice[], RawDevice[]]
+  >(
+    `${prelude}
+     ${SUMMARY_SELECT}
+     SELECT * FROM #dev ${orderBy(sort)}
+       OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY;
+     SELECT TOP (@queueLimit) * FROM #dev
+       WHERE ${OUTDATED_WHERE}
+       ${OUTDATED_ORDER};
+     SELECT TOP (@queueLimit) * FROM #dev
+       WHERE ${STALE_WHERE}
+       ${STALE_ORDER};
+     DROP TABLE #dev;`,
+    [...params, ...paging],
+  );
+
+  // `SUMMARY_SELECT` already counts `#dev`, so the separate `SELECT COUNT(*)`
+  // this used to run was a second scan answering a question already answered.
+  const summary = toSummary(summaryRows[0]);
 
   return {
-    summary: toSummary(summaryRows[0]),
-    devices: (deviceRows as RawDevice[]).map(normalise),
-    total: Number(totalRows[0]?.total ?? 0),
-    outdated: (outdatedRows as RawDevice[]).map(normalise),
-    stale: (staleRows as RawDevice[]).map(normalise),
+    summary,
+    devices: deviceRows.map(normalise),
+    total: summary.total,
+    outdated: outdatedRows.map(normalise),
+    stale: staleRows.map(normalise),
   };
 }
 
@@ -588,7 +595,7 @@ export async function getCharts(
     distributionRows,
     namingRows,
     breakdownRows,
-  ] = await queryBatch(
+  ] = await queryBatch<[RawRows, RawRows, RawRows, RawRows, RawRows]>(
     `${prelude}
      ${SUMMARY_SELECT}
      ${DEPARTMENT_HEALTH_SELECT}
@@ -625,7 +632,9 @@ export async function getExportData(
 ): Promise<ExportData> {
   const { prelude, params } = materialise(filters);
 
-  const [summaryRows, deviceRows, outdatedRows, staleRows] = await queryBatch(
+  const [summaryRows, deviceRows, outdatedRows, staleRows] = await queryBatch<
+    [RawRows, RawDevice[], RawDevice[], RawDevice[]]
+  >(
     `${prelude}
      ${SUMMARY_SELECT}
      SELECT * FROM #dev ${orderBy(sort)};
@@ -637,9 +646,9 @@ export async function getExportData(
 
   return {
     summary: toSummary(summaryRows[0]),
-    devices: (deviceRows as RawDevice[]).map(normalise),
-    outdated: (outdatedRows as RawDevice[]).map(normalise),
-    stale: (staleRows as RawDevice[]).map(normalise),
+    devices: deviceRows.map(normalise),
+    outdated: outdatedRows.map(normalise),
+    stale: staleRows.map(normalise),
   };
 }
 

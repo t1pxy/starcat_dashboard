@@ -1,3 +1,5 @@
+import type { Dimension } from "./dimensions";
+
 /** One row of the device dashboard, already flattened and cleaned. */
 export type Device = {
   agentId: string;
@@ -59,18 +61,17 @@ export type Device = {
  */
 export type DeviceScope = "computers" | "all";
 
-/** Every filter is optional; an absent key means "ไม่กรอง" (no restriction). */
-export type DeviceFilters = {
+/**
+ * Every filter is optional; an absent key means "ไม่กรอง" (no restriction).
+ *
+ * The seven dimension filters are derived from `DIMENSIONS` rather than listed
+ * again, so a dimension cannot exist in the SQL layer without also being
+ * accepted here — each one accepts a list of values, matched with `IN (…)`.
+ */
+export type DeviceFilters = Partial<Record<Dimension, string[]>> & {
   /** Absent means the computers-only default. */
   scope?: DeviceScope;
   search?: string;
-  deviceType?: string[];
-  category?: string[];
-  brand?: string[];
-  model?: string[];
-  department?: string[];
-  location?: string[];
-  windowsVersion?: string[];
   online?: "true" | "false";
   /** Devices whose warranty ends within N days (negative = already expired). */
   warrantyWithinDays?: number;
@@ -83,15 +84,9 @@ export type DeviceFilters = {
 
 export type FacetValue = { value: string; count: number };
 
-export type Facets = {
-  deviceType: FacetValue[];
-  category: FacetValue[];
-  brand: FacetValue[];
-  model: FacetValue[];
-  department: FacetValue[];
-  location: FacetValue[];
-  windowsVersion: FacetValue[];
-};
+/** One list of dropdown options per dimension — always all seven, so the filter
+ *  bar can render itself straight from `DIMENSIONS`. */
+export type Facets = Record<Dimension, FacetValue[]>;
 
 export type Summary = {
   total: number;

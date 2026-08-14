@@ -1,31 +1,21 @@
 import Link from "next/link";
 
+import { Bilingual } from "@/components/ui/typography";
+import { MUTED_TEXT, TONE_SURFACE, TONE_TEXT, type Tone } from "@/components/ui/tone";
 import { formatNumber } from "@/lib/devices/format";
 import { EXPIRING_SOON_DAYS } from "@/lib/devices/schema";
 import type { Summary } from "@/lib/devices/types";
 
 /**
- * Tone is reserved for state, not decoration: `warn`/`bad` only ever mark a
- * count that represents work to be done, so a coloured tile always means
- * "look here".
+ * The six numbers worth knowing before scrolling.
+ *
+ * Tone is reserved for tiles that represent *work*: a coloured tile always means
+ * "there is something to do here". "ออนไลน์" used to be permanently green, which
+ * spent the good/warning/critical vocabulary on a number that is neither good
+ * nor bad — a fleet is not healthier for having more machines switched on right
+ * now — and made the three tiles that do carry work harder to pick out. It is
+ * neutral now, like the total and the average age.
  */
-type Tone = "neutral" | "good" | "warn" | "bad";
-
-const TONE_CLASSES: Record<Tone, string> = {
-  neutral:
-    "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900",
-  good: "border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/60 dark:bg-emerald-950/30",
-  warn: "border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/30",
-  bad: "border-red-200 bg-red-50/60 dark:border-red-900/60 dark:bg-red-950/30",
-};
-
-const VALUE_CLASSES: Record<Tone, string> = {
-  neutral: "text-zinc-900 dark:text-zinc-50",
-  good: "text-emerald-700 dark:text-emerald-300",
-  warn: "text-amber-700 dark:text-amber-300",
-  bad: "text-red-700 dark:text-red-300",
-};
-
 type Tile = {
   label: string;
   english: string;
@@ -36,34 +26,31 @@ type Tile = {
   href?: string;
 };
 
-function Card({ tile }: { tile: Tile }) {
+function KpiTile({ tile }: { tile: Tile }) {
   const body = (
     <>
       <div className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
         {tile.label}
-        <span className="ml-1.5 text-xs font-normal text-zinc-400 dark:text-zinc-500">
-          {tile.english}
-        </span>
+        <Bilingual className="ml-1.5 text-xs">{tile.english}</Bilingual>
       </div>
       <div
-        className={`mt-2 text-3xl font-semibold tabular-nums tracking-tight ${VALUE_CLASSES[tile.tone]}`}
+        className={`mt-2 text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl ${TONE_TEXT[tile.tone]}`}
       >
         {tile.value}
       </div>
       {tile.hint ? (
-        <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          {tile.hint}
-        </div>
+        <div className={`mt-1 text-xs ${MUTED_TEXT}`}>{tile.hint}</div>
       ) : null}
     </>
   );
 
-  const className = `rounded-xl border p-4 transition-colors ${TONE_CLASSES[tile.tone]} ${
-    tile.href ? "hover:border-zinc-400 dark:hover:border-zinc-600" : ""
-  }`;
+  const className = `rounded-xl border p-4 transition-colors ${TONE_SURFACE[tile.tone]}`;
 
   return tile.href ? (
-    <Link href={tile.href} className={`block ${className}`}>
+    <Link
+      href={tile.href}
+      className={`block hover:border-zinc-400 dark:hover:border-zinc-600 ${className}`}
+    >
       {body}
     </Link>
   ) : (
@@ -98,7 +85,7 @@ export function SummaryCards({
       english: "Online",
       value: formatNumber(summary.online),
       hint: `ออฟไลน์ ${formatNumber(summary.offline)}`,
-      tone: "good",
+      tone: "neutral",
       href: "/devices?online=true",
     },
     {
@@ -115,7 +102,7 @@ export function SummaryCards({
       hint: summary.newestWindowsVersion
         ? `ล่าสุดในองค์กรคือ ${summary.newestWindowsVersion}`
         : undefined,
-      tone: summary.outdatedWindows > 0 ? "warn" : "good",
+      tone: summary.outdatedWindows > 0 ? "warning" : "good",
       href: "/devices?outdated=1",
     },
     {
@@ -123,7 +110,7 @@ export function SummaryCards({
       english: "Stale agents",
       value: formatNumber(summary.staleAgents),
       hint: "เครื่องที่เงียบหายไป อัพเดทไม่ได้",
-      tone: summary.staleAgents > 0 ? "warn" : "good",
+      tone: summary.staleAgents > 0 ? "warning" : "good",
       href: `/devices?stale=${staleDays}`,
     },
     {
@@ -133,9 +120,9 @@ export function SummaryCards({
       hint: `ใกล้หมดใน ${EXPIRING_SOON_DAYS} วัน: ${formatNumber(summary.warrantyExpiring90)}`,
       tone:
         summary.warrantyExpired > 0
-          ? "bad"
+          ? "critical"
           : summary.warrantyExpiring90 > 0
-            ? "warn"
+            ? "warning"
             : "good",
       href: "/devices?warrantyWithin=0",
     },
@@ -144,7 +131,7 @@ export function SummaryCards({
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
       {tiles.map((tile) => (
-        <Card key={tile.english} tile={tile} />
+        <KpiTile key={tile.english} tile={tile} />
       ))}
     </div>
   );

@@ -35,6 +35,14 @@
    */
   --series-1: #2a78d6;
   --series-2: #eb6834;
+
+  /*
+   * Keyboard focus. Every control here is a bordered, rounded button or link,
+   * and the browser's default outline sits almost invisibly against those
+   * borders in dark mode — so focus is drawn explicitly, in the same sky the
+   * rest of the UI uses for "you have selected this".
+   */
+  --focus-ring: #0284c7; /* sky-600 */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,9 +50,21 @@
     --status-none: #3f3f46; /* zinc-700 */
     --series-1: #3987e5;
     --series-2: #d95926;
+    --focus-ring: #38bdf8; /* sky-400 */
   }
 }
 
 body {
   font-family: var(--font-sans);
+}
+
+/*
+ * Applied through `:where()` so it costs no specificity: any component that
+ * wants its own focus treatment can override it with a single class, and
+ * everything else gets a visible ring for free. `:focus-visible` rather than
+ * `:focus`, so a mouse click does not leave a ring behind.
+ */
+:where(a, button, summary, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }

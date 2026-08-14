@@ -53,7 +53,7 @@ function readConfig(): sql.config {
   };
 }
 
-export function getPool(): Promise<sql.ConnectionPool> {
+function getPool(): Promise<sql.ConnectionPool> {
   if (!globalForDb.starcatPool) {
     globalForDb.starcatPool = new sql.ConnectionPool(readConfig())
       .connect()
@@ -100,17 +100,20 @@ export async function query<T extends Record<string, unknown>>(
  * connection, and a batch always runs on one connection, so the pool cannot
  * split these statements apart.
  */
-export async function queryBatch(
-  statement: string,
-  params: QueryParam[] = [],
-): Promise<Record<string, unknown>[][]> {
+export async function queryBatch<
+  T extends readonly Record<string, unknown>[][],
+>(statement: string, params: QueryParam[] = []): Promise<T> {
   const pool = await getPool();
   const request = pool.request();
   for (const param of params) {
     request.input(param.name, param.type, param.value);
   }
   const result = await request.query(statement);
-  return result.recordsets as unknown as Record<string, unknown>[][];
+  // The single place the "SQL columns match the declared row type" assumption
+  // is made. It cannot be checked at compile time — the column list lives in a
+  // template string — so callers state the shape they expect as a tuple and
+  // this is the one cast that serves all of them.
+  return result.recordsets as unknown as T;
 }
 
 export { sql };

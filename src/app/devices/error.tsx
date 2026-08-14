@@ -37,9 +37,21 @@ export default function Error({
           <li>ตรวจว่าบัญชีที่ใช้มีสิทธิ์อ่านตารางที่เกี่ยวข้อง</li>
         </ul>
 
-        <pre className="mt-4 overflow-x-auto rounded-lg bg-red-100 p-3 text-xs text-red-900 dark:bg-red-950/60 dark:text-red-200">
-          {error.message}
-        </pre>
+        {/*
+          The raw message can carry a server name, a login or a fragment of SQL,
+          and it is meaningless to the person who just wanted the device list —
+          so it is folded away for whoever is actually debugging. The digest is
+          what ties this screen to the server log entry.
+        */}
+        <details className="mt-4">
+          <summary className="cursor-pointer text-xs text-red-800 dark:text-red-300">
+            รายละเอียดทางเทคนิค (สำหรับผู้ดูแลระบบ)
+          </summary>
+          <pre className="mt-2 overflow-x-auto rounded-lg bg-red-100 p-3 text-xs text-red-900 dark:bg-red-950/60 dark:text-red-200">
+            {error.message}
+            {error.digest ? `\n\ndigest: ${error.digest}` : ""}
+          </pre>
+        </details>
 
         <button
           type="button"

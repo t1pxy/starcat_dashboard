@@ -1,3 +1,4 @@
+import { MUTED_TEXT, PLACEHOLDER_TEXT, TONE_TEXT } from "@/components/ui/tone";
 import type { DeviceColumn } from "@/lib/devices/columns";
 import { describeDeviceName, parseDeviceName } from "@/lib/devices/device-name";
 import {
@@ -16,13 +17,36 @@ import {
   type PatchSeverity,
 } from "@/lib/devices/windows-servicing";
 
-/** Same tone vocabulary the charts use: red is overdue, amber is scheduled. */
+/**
+ * Patch severity, said in the dashboard's shared tone vocabulary.
+ *
+ * "unsupported" and "critical" are both red because both are already overdue —
+ * one needs a new Windows, the other needs the updates it has skipped. "ok" is
+ * deliberately muted rather than green: a fully patched machine is the
+ * expectation, not an achievement worth colouring.
+ */
 export const PATCH_TONE: Record<PatchSeverity, string> = {
-  unsupported: "text-red-600 dark:text-red-400",
-  critical: "text-red-600 dark:text-red-400",
-  warning: "text-amber-600 dark:text-amber-500",
-  ok: "text-zinc-400 dark:text-zinc-500",
+  unsupported: TONE_TEXT.critical,
+  critical: TONE_TEXT.critical,
+  warning: TONE_TEXT.warning,
+  ok: MUTED_TEXT,
 };
+
+/** A secondary line under a cell's main value — the decoded name, the patch
+ *  gap, how long a machine has been offline. */
+function SubLine({
+  children,
+  className = MUTED_TEXT,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span className={`block text-[11px] leading-tight font-normal ${className}`}>
+      {children}
+    </span>
+  );
+}
 
 /** Renders one cell according to its column kind, so the table and the export
  *  agree on what every field means. */
@@ -46,13 +70,7 @@ export function DeviceCell({
     return (
       <>
         {formatText(device.windowsVersion)}
-        {gap ? (
-          <span
-            className={`block text-[10px] leading-tight font-normal ${PATCH_TONE[severity]}`}
-          >
-            {gap}
-          </span>
-        ) : null}
+        {gap ? <SubLine className={PATCH_TONE[severity]}>{gap}</SubLine> : null}
       </>
     );
   }
@@ -64,11 +82,7 @@ export function DeviceCell({
     return (
       <>
         {formatText(device.deviceName)}
-        {parts ? (
-          <span className="block text-[10px] leading-tight font-normal text-zinc-400 dark:text-zinc-500">
-            {describeDeviceName(parts)}
-          </span>
-        ) : null}
+        {parts ? <SubLine>{describeDeviceName(parts)}</SubLine> : null}
       </>
     );
   }
@@ -81,27 +95,23 @@ export function DeviceCell({
     const offlineFor = online ? null : formatOfflineFor(device.lastSeen);
 
     return (
-      <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex items-start gap-1.5">
         <span
           aria-hidden
-          className={`size-1.5 rounded-full ${
-            online ? "bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600"
+          className={`mt-1.5 size-1.5 shrink-0 rounded-full ${
+            online ? "bg-emerald-500" : "bg-zinc-400 dark:bg-zinc-600"
           }`}
         />
         <span className={online ? "text-emerald-700 dark:text-emerald-400" : ""}>
           {online ? "ออนไลน์" : "ออฟไลน์"}
-          {offlineFor ? (
-            <span className="block text-[10px] leading-tight font-normal text-zinc-400 dark:text-zinc-500">
-              {offlineFor}
-            </span>
-          ) : null}
+          {offlineFor ? <SubLine>{offlineFor}</SubLine> : null}
         </span>
       </span>
     );
   }
 
   if (value === null || value === undefined) {
-    return <span className="text-zinc-300 dark:text-zinc-600">{EM_DASH}</span>;
+    return <span className={PLACEHOLDER_TEXT}>{EM_DASH}</span>;
   }
 
   switch (column.kind) {

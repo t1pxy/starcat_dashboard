@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { LiveRefresh } from "@/components/live-refresh";
+import { WallSkeleton } from "@/components/skeletons";
+import { TONE_ON_DARK, type Tone } from "@/components/ui/tone";
 import {
   countActiveFilters,
   parseFilters,
@@ -45,13 +47,6 @@ const QUEUE_ROWS = 10;
 /** Matches `queueLimit` below, so a capped list can say that it is capped. */
 const QUEUE_LIMIT = 200;
 
-const TILE_TONE = {
-  good: "border-emerald-800/60 bg-emerald-950/40 text-emerald-300",
-  warn: "border-amber-800/60 bg-amber-950/40 text-amber-300",
-  bad: "border-red-800/60 bg-red-950/40 text-red-300",
-  neutral: "border-zinc-800 bg-zinc-900/60 text-zinc-100",
-} as const;
-
 function Tile({
   label,
   english,
@@ -63,10 +58,10 @@ function Tile({
   english: string;
   value: string;
   caption?: string;
-  tone: keyof typeof TILE_TONE;
+  tone: Tone;
 }) {
   return (
-    <div className={`rounded-2xl border p-5 ${TILE_TONE[tone]}`}>
+    <div className={`rounded-2xl border p-5 ${TONE_ON_DARK[tone]}`}>
       <div className="text-base font-medium text-zinc-300">
         {label}
         <span className="ml-2 text-sm font-normal text-zinc-500">{english}</span>
@@ -108,7 +103,9 @@ function Banner({
 
   if (jobs.length === 0) {
     return (
-      <div className="rounded-2xl border border-emerald-800/60 bg-emerald-950/40 px-6 py-5 text-2xl font-medium text-emerald-300">
+      <div
+        className={`rounded-2xl border px-6 py-5 text-2xl font-medium ${TONE_ON_DARK.good}`}
+      >
         ทุกเครื่องปกติ — ไม่มีงานค้าง
         <span className="ml-3 text-lg font-normal text-emerald-500/80">
           All clear
@@ -124,16 +121,10 @@ function Banner({
   return (
     <div
       className={`rounded-2xl border px-6 py-5 ${
-        critical
-          ? "border-red-800/60 bg-red-950/40"
-          : "border-amber-800/60 bg-amber-950/40"
+        critical ? TONE_ON_DARK.critical : TONE_ON_DARK.warning
       }`}
     >
-      <div
-        className={`text-2xl font-medium ${critical ? "text-red-300" : "text-amber-300"}`}
-      >
-        มีงานค้าง {jobs.join(" · ")}
-      </div>
+      <div className="text-2xl font-medium">มีงานค้าง {jobs.join(" · ")}</div>
       <div className="mt-1 text-base text-zinc-400">
         นับ &quot;ไม่ติดต่อ&quot; ที่ {staleDays} วันขึ้นไป
       </div>
@@ -151,12 +142,12 @@ function QueuePanel({
 }: {
   title: string;
   english: string;
-  tone: "warn" | "bad";
+  tone: Extract<Tone, "warning" | "critical">;
   devices: Device[];
   emptyLabel: string;
   children: (device: Device) => React.ReactNode;
 }) {
-  const accent = tone === "bad" ? "text-red-300" : "text-amber-300";
+  const accent = tone === "critical" ? "text-red-300" : "text-amber-300";
   // The query caps the list, so the count says "200+" rather than claiming the
   // cap is the answer.
   const capped = devices.length >= QUEUE_LIMIT;
@@ -222,7 +213,7 @@ async function Wall({ params }: { params: RawSearchParams }) {
     : 0;
 
   return (
-    <div className="flex min-h-screen flex-col gap-4 bg-zinc-950 p-6 text-zinc-100">
+    <main className="flex min-h-screen flex-col gap-4 bg-zinc-950 p-6 text-zinc-100">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold">
@@ -265,7 +256,7 @@ async function Wall({ params }: { params: RawSearchParams }) {
           english="Out of contact"
           value={formatNumber(summary.staleAgents)}
           caption="ต้องตามหาก่อนถึงจะอัพเดทได้"
-          tone={summary.staleAgents > 0 ? "bad" : "good"}
+          tone={summary.staleAgents > 0 ? "critical" : "good"}
         />
         <Tile
           label="Windows ไม่ใช่เวอร์ชันล่าสุด"
@@ -276,7 +267,7 @@ async function Wall({ params }: { params: RawSearchParams }) {
               ? `ล่าสุดในองค์กรคือ ${summary.newestWindowsVersion}`
               : undefined
           }
-          tone={summary.outdatedWindows > 0 ? "warn" : "good"}
+          tone={summary.outdatedWindows > 0 ? "warning" : "good"}
         />
         <Tile
           label="ประกันหมดแล้ว"
@@ -285,9 +276,9 @@ async function Wall({ params }: { params: RawSearchParams }) {
           caption={`ใกล้หมดใน 90 วัน: ${formatNumber(summary.warrantyExpiring90)}`}
           tone={
             summary.warrantyExpired > 0
-              ? "bad"
+              ? "critical"
               : summary.warrantyExpiring90 > 0
-                ? "warn"
+                ? "warning"
                 : "good"
           }
         />
@@ -297,7 +288,7 @@ async function Wall({ params }: { params: RawSearchParams }) {
         <QueuePanel
           title="ต้องตามหา"
           english="Out of contact"
-          tone="bad"
+          tone="critical"
           devices={stale}
           emptyLabel="ทุกเครื่องติดต่อเข้ามาตามปกติ 🎉"
         >
@@ -319,7 +310,7 @@ async function Wall({ params }: { params: RawSearchParams }) {
         <QueuePanel
           title="ต้องอัพเดท Windows"
           english="Needs update"
-          tone="warn"
+          tone="warning"
           devices={outdated}
           emptyLabel="ทุกเครื่องที่ติดต่อได้เป็นเวอร์ชันล่าสุดแล้ว 🎉"
         >
@@ -338,7 +329,7 @@ async function Wall({ params }: { params: RawSearchParams }) {
           )}
         </QueuePanel>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -350,13 +341,7 @@ export default async function WallPage({
   const params = await searchParams;
 
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-xl text-zinc-500">
-          กำลังโหลดข้อมูลจาก Starcat…
-        </div>
-      }
-    >
+    <Suspense fallback={<WallSkeleton />}>
       <Wall params={params} />
     </Suspense>
   );
